@@ -1,0 +1,202 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_mode:
+        description: "Build mode (production/local)"
+        required: false
+        default: "production"
+      module_channel:
+        description: "Catalog channel (preview/prod)"
+        required: false
+        default: "preview"
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-package:
+    runs-on: ubuntu-latest
+    outputs:
+      module_version: ${{ steps.meta.outputs.module_version }}
+      module_channel: ${{ steps.meta.outputs.module_channel }}
+    permissions:
+      contents: write
+    env:
+      MFE_BUILD_MODE: ${{ inputs.build_mode || 'production' }}
+      MODULE_CHANNEL_OVERRIDE: ${{ inputs.module_channel || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Resolve Publish Metadata
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "module_version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            if [[ -n "${MODULE_CHANNEL_OVERRIDE}" ]]; then
+              echo "module_channel=${MODULE_CHANNEL_OVERRIDE}" >> "$GITHUB_OUTPUT"
+            else
+              echo "module_channel=prod" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "module_version=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+            if [[ -n "${MODULE_CHANNEL_OVERRIDE}" ]]; then
+              echo "module_channel=${MODULE_CHANNEL_OVERRIDE}" >> "$GITHUB_OUTPUT"
+            else
+              echo "module_channel=preview" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Prepare Module Publish Manifest
+        id: registry
+        env:
+          MODULE_VERSION: ${{ steps.meta.outputs.module_version }}
+          MFE_RELEASE_TAG: ${{ github.ref_name }}
+          MFE_RELEASE_SHA: ${{ github.sha }}
+        run: npm run publish:registry
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: example-mfe-dist
+          if-no-files-found: warn
+          path: |
+            dist/example-mfe.js
+            dist/example-mfe.js.map
+            dist/module.definition.json
+            dist/module.publish.json
+            directus/cms-module.seed.json
+            directus/cms-block-module.props.example.json
+            scripts/notify-catalog-service.mjs
+
+      - name: Create GitHub Release (tag pushes)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
+        with:
+          fail_on_unmatched_files: false
+          files: |
+            dist/example-mfe.js
+            dist/example-mfe.js.map
+            dist/module.definition.json
+            dist/module.publish.json
+            directus/cms-module.seed.json
+            directus/cms-block-module.props.example.json
+
+  publish-registry:
+    needs:
+      - build-package
+    runs-on: self-hosted
+    permissions:
+      contents: read
+    env:
+      MODULE_REGISTRY_SERVICE_URL: ${{ vars.MODULE_REGISTRY_SERVICE_URL || secrets.MODULE_REGISTRY_SERVICE_URL }}
+      MODULE_REGISTRY_SERVICE_URL_PREVIEW: ${{ vars.MODULE_REGISTRY_SERVICE_URL_PREVIEW || secrets.MODULE_REGISTRY_SERVICE_URL_PREVIEW }}
+      MODULE_REGISTRY_SERVICE_URL_PROD: ${{ vars.MODULE_REGISTRY_SERVICE_URL_PROD || vars.MODULE_REGISTRY_SERVICE_URL_PRODUCTION || secrets.MODULE_REGISTRY_SERVICE_URL_PROD || secrets.MODULE_REGISTRY_SERVICE_URL_PRODUCTION }}
+      MODULE_REGISTRY_SERVICE_PUBLISH_PATH: ${{ vars.MODULE_REGISTRY_SERVICE_PUBLISH_PATH || '/v1/modules/publish' }}
+      MODULE_REGISTRY_SERVICE_GOOGLE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.MODULE_REGISTRY_SERVICE_GOOGLE_SERVICE_ACCOUNT_EMAIL }}
+      MODULE_REGISTRY_SERVICE_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.MODULE_REGISTRY_SERVICE_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY }}
+      MODULE_REGISTRY_SERVICE_GOOGLE_TOKEN_AUDIENCE: ${{ secrets.MODULE_REGISTRY_SERVICE_GOOGLE_TOKEN_AUDIENCE }}
+      MODULE_CHANNEL: ${{ needs['build-package'].outputs.module_channel }}
+      MFE_BUILD_MODE: ${{ inputs.build_mode || 'production' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Preflight Runner Tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! command -v node >/dev/null 2>&1; then
+            echo "Required command 'node' is missing on this self-hosted runner."
+            exit 1
+          fi
+
+          if ! command -v npm >/dev/null 2>&1; then
+            echo "Required command 'npm' is missing on this self-hosted runner."
+            exit 1
+          fi
+
+          NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
+          if [[ "${NODE_MAJOR}" -lt 20 ]]; then
+            echo "Node.js 20+ is required. Found: $(node -v)"
+            exit 1
+          fi
+
+          echo "Runner tooling check passed."
+          echo "Node: $(node -v)"
+          echo "NPM: $(npm -v)"
+
+      - name: Download Build Artifact
+        id: download_artifact
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: example-mfe-dist
+          path: .
+
+      - name: Rebuild Artifact Locally (fallback)
+        if: ${{ steps.download_artifact.outcome != 'success' }}
+        env:
+          MODULE_VERSION: ${{ needs['build-package'].outputs.module_version }}
+          MFE_RELEASE_TAG: ${{ github.ref_name }}
+          MFE_RELEASE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Artifact download failed on self-hosted runner; rebuilding package locally."
+          npm ci
+          npm run build
+          npm run publish:registry
+
+      - name: Validate Publish Inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          REQUIRED_FILES=(
+            "dist/example-mfe.js"
+            "dist/module.publish.json"
+            "scripts/notify-catalog-service.mjs"
+          )
+
+          for required_file in "${REQUIRED_FILES[@]}"; do
+            if [[ ! -f "${required_file}" ]]; then
+              echo "Missing required file for publish: ${required_file}"
+              exit 1
+            fi
+          done
+
+      - name: Resolve Module Registry URL
+        id: registry_url
+        shell: bash
+        run: |
+          CHANNEL="${MODULE_CHANNEL}"
+          if [[ "${CHANNEL}" == "prod" ]]; then
+            TARGET_URL="${MODULE_REGISTRY_SERVICE_URL_PROD:-${MODULE_REGISTRY_SERVICE_URL}}"
+          else
+            TARGET_URL="${MODULE_REGISTRY_SERVICE_URL_PREVIEW:-${MODULE_REGISTRY_SERVICE_URL}}"
+          fi
+
+          echo "registry_service_url=${TARGET_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Notify Module Registry Service
+        if: ${{ steps.registry_url.outputs.registry_service_url != '' }}
+        env:
+          MODULE_REGISTRY_SERVICE_URL: ${{ steps.registry_url.outputs.registry_service_url }}
+          MODULE_PUBLISH_MANIFEST_PATH: dist/module.publish.json
+        run: node scripts/notify-catalog-service.mjs

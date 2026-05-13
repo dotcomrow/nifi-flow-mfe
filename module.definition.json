@@ -1,0 +1,592 @@
+{
+  "contract_version": "1.0.0",
+  "module_key": "mfe-example-chat",
+  "module_version": "0.1.0",
+  "kind": "mfe",
+  "display_name": "MFE Example Chat (GraphQL Stream)",
+  "description": "Example MFE chat input that submits prompt over GraphQL mutation and receives response over GraphQL stream subscription.",
+  "targets": [
+    "web"
+  ],
+  "execution": {
+    "mode": "inline",
+    "preload": "lazy",
+    "entry": {
+      "web_package": "dist/example-mfe.js",
+      "export_name": "createModule"
+    }
+  },
+  "io": {
+    "slots_in": [
+      "main"
+    ],
+    "slots_out": [],
+    "props_schema": {
+      "type": "object",
+      "title": "Chat Module Props",
+      "description": "Configuration for the Example Chat MFE runtime and GraphQL transport.",
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "title": "Title",
+          "description": "Header text shown at the top of the chat module."
+        },
+        "inputPlaceholder": {
+          "type": "string",
+          "title": "Input Placeholder",
+          "description": "Placeholder text shown inside the prompt input."
+        },
+        "submitLabel": {
+          "type": "string",
+          "title": "Submit Label",
+          "description": "Button label used to submit a prompt."
+        },
+        "assistantLabel": {
+          "type": "string",
+          "title": "Assistant Label",
+          "description": "Display name used for assistant response messages."
+        },
+        "maxMessages": {
+          "type": "integer",
+          "title": "Max Messages",
+          "description": "Maximum number of chat lines retained in the visible message list.",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "requestCommand": {
+          "type": "string",
+          "title": "Request Command",
+          "description": "Command name the host uses to invoke this chat module programmatically."
+        },
+        "graphql": {
+          "type": "object",
+          "title": "GraphQL Transport",
+          "description": "GraphQL mutation + streaming subscription settings used by this module.",
+          "additionalProperties": false,
+          "properties": {
+            "httpUrl": {
+              "type": "string",
+              "title": "GraphQL HTTP URL",
+              "description": "HTTP endpoint used for GraphQL mutation requests.",
+              "format": "uri"
+            },
+            "wsUrl": {
+              "type": "string",
+              "title": "GraphQL WS URL",
+              "description": "WebSocket endpoint used for GraphQL stream subscriptions.",
+              "format": "uri"
+            },
+            "authToken": {
+              "type": "string",
+              "title": "Auth Token",
+              "description": "Optional bearer token override for GraphQL HTTP and WS calls. Leave empty to inherit shell auth."
+            },
+            "hasuraRole": {
+              "type": "string",
+              "title": "Hasura Role",
+              "description": "Deprecated for async mode. This module does not send X-Hasura-Role and uses the token-derived default role."
+            },
+            "tokenExchange": {
+              "type": "object",
+              "title": "Token Exchange",
+              "description": "Optional OAuth token exchange for converting the shell access token to the audience needed by this MFE.",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "title": "Enabled",
+                  "description": "When true, exchange the current bearer token before GraphQL submit/stream calls."
+                },
+                "requestedAudience": {
+                  "type": "string",
+                  "title": "Requested Audience",
+                  "description": "Target audience for exchanged token (for example Hasura audience/client id)."
+                },
+                "requestedAudiences": {
+                  "type": "array",
+                  "title": "Requested Audiences",
+                  "description": "Optional list of target audiences. Use when a single exchanged token must include multiple aud values.",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "requestedScope": {
+                  "type": "string",
+                  "title": "Requested Scope",
+                  "description": "Optional scope requested during token exchange."
+                },
+                "exchangeUrl": {
+                  "type": "string",
+                  "title": "Gateway Exchange URL",
+                  "description": "Dedicated backend token exchange endpoint (for example auth-gateway /v1/auth/token-exchange). When set, token exchange is performed through this backend.",
+                  "format": "uri"
+                },
+                "appSlug": {
+                  "type": "string",
+                  "title": "Gateway App Slug",
+                  "description": "Registered auth-gateway app slug used by the backend token exchange endpoint."
+                },
+                "tokenUrl": {
+                  "type": "string",
+                  "title": "Token Endpoint URL",
+                  "description": "OIDC token endpoint used for token exchange. Leave empty to use shell auth runtime defaults.",
+                  "format": "uri"
+                },
+                "clientId": {
+                  "type": "string",
+                  "title": "Client Id",
+                  "description": "OIDC client id used for token exchange. Leave empty to use shell auth runtime defaults."
+                }
+              }
+            },
+            "submitMutation": {
+              "type": "string",
+              "title": "Submit Mutation",
+              "description": "GraphQL mutation document used to submit async requests."
+            },
+            "submitVariables": {
+              "type": "object",
+              "title": "Submit Variables Template",
+              "description": "JSON template for submit mutation variables. Supports placeholders like {{prompt}} and {{requestId}}.",
+              "additionalProperties": true
+            },
+            "submitRequestIdPath": {
+              "type": "string",
+              "title": "Submit Request Id Path",
+              "description": "Dot-path to extract request id from the mutation response payload."
+            },
+            "streamSubscription": {
+              "type": "string",
+              "title": "Stream Subscription",
+              "description": "GraphQL subscription document used to stream async response updates."
+            },
+            "streamVariables": {
+              "type": "object",
+              "title": "Stream Variables Template",
+              "description": "JSON template for stream subscription variables.",
+              "additionalProperties": true
+            },
+            "streamTextPath": {
+              "type": "string",
+              "title": "Stream Text Path",
+              "description": "Dot-path to read streamed assistant text from subscription payloads."
+            },
+            "streamDonePath": {
+              "type": "string",
+              "title": "Stream Done Path",
+              "description": "Dot-path to read completion status from subscription payloads."
+            },
+            "streamErrorPath": {
+              "type": "string",
+              "title": "Stream Error Path",
+              "description": "Dot-path to read error text from subscription payloads."
+            },
+            "streamChunkMode": {
+              "type": "string",
+              "title": "Stream Chunk Mode",
+              "description": "How incoming stream text is applied to the assistant response.",
+              "enum": [
+                "append",
+                "replace"
+              ]
+            },
+            "conversationId": {
+              "type": "string",
+              "title": "Conversation Id",
+              "description": "Optional fixed conversation identifier passed through submit/stream templates."
+            }
+          },
+          "required": [
+            "httpUrl",
+            "wsUrl",
+            "submitMutation",
+            "submitRequestIdPath",
+            "streamSubscription",
+            "streamTextPath",
+            "streamDonePath",
+            "streamChunkMode"
+          ]
+        },
+        "async": {
+          "type": "object",
+          "title": "Async Config",
+          "description": "Host runtime async behavior for request/retry/stream/queue processing.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "title": "Enabled",
+              "description": "Enable async mode handling for this module instance."
+            },
+            "mode": {
+              "type": "string",
+              "title": "Mode",
+              "description": "Async operation mode used by the host runtime.",
+              "enum": [
+                "none",
+                "graphql-stream",
+                "kafka-graphql-bridge",
+                "request-response",
+                "subscribe",
+                "mixed"
+              ],
+              "default": "kafka-graphql-bridge"
+            },
+            "request": {
+              "type": "object",
+              "title": "Request Policy",
+              "description": "Request timeout and retry policy for outbound async requests.",
+              "additionalProperties": false,
+              "properties": {
+                "supported": {
+                  "type": "boolean",
+                  "title": "Supported",
+                  "description": "Whether request-response operations are supported."
+                },
+                "defaultTimeoutMs": {
+                  "type": "integer",
+                  "title": "Default Timeout (ms)",
+                  "description": "Default request timeout used by the runtime.",
+                  "minimum": 1,
+                  "maximum": 600000
+                },
+                "retry": {
+                  "type": "object",
+                  "title": "Retry Policy",
+                  "description": "Retry/backoff settings for request failures.",
+                  "additionalProperties": false,
+                  "properties": {
+                    "maxAttempts": {
+                      "type": "integer",
+                      "title": "Max Attempts",
+                      "description": "Maximum retry attempts after the initial request.",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "initialBackoffMs": {
+                      "type": "integer",
+                      "title": "Initial Backoff (ms)",
+                      "description": "Initial wait time before the first retry.",
+                      "minimum": 0,
+                      "maximum": 600000
+                    },
+                    "maxBackoffMs": {
+                      "type": "integer",
+                      "title": "Max Backoff (ms)",
+                      "description": "Upper bound for exponential retry backoff.",
+                      "minimum": 0,
+                      "maximum": 600000
+                    },
+                    "jitter": {
+                      "type": "boolean",
+                      "title": "Jitter",
+                      "description": "Enable randomized jitter to reduce retry stampedes."
+                    }
+                  },
+                  "required": [
+                    "maxAttempts",
+                    "initialBackoffMs",
+                    "maxBackoffMs",
+                    "jitter"
+                  ]
+                }
+              },
+              "required": [
+                "supported",
+                "defaultTimeoutMs",
+                "retry"
+              ]
+            },
+            "stream": {
+              "type": "object",
+              "title": "Stream Policy",
+              "description": "Streaming transport settings for async response delivery.",
+              "additionalProperties": false,
+              "properties": {
+                "supported": {
+                  "type": "boolean",
+                  "title": "Supported",
+                  "description": "Whether streaming responses are supported."
+                },
+                "transport": {
+                  "type": "string",
+                  "title": "Transport",
+                  "description": "Transport used for streaming responses.",
+                  "enum": [
+                    "none",
+                    "graphql-ws",
+                    "sse",
+                    "webhook",
+                    "kafka-bridge"
+                  ]
+                },
+                "endpointRef": {
+                  "type": "string",
+                  "title": "Endpoint Ref",
+                  "description": "Named endpoint alias used by the host runtime."
+                },
+                "authMode": {
+                  "type": "string",
+                  "title": "Auth Mode",
+                  "description": "Authentication mode for stream transport connections.",
+                  "enum": [
+                    "inherit",
+                    "token",
+                    "mtls",
+                    "none"
+                  ]
+                },
+                "reconnect": {
+                  "type": "object",
+                  "title": "Reconnect Policy",
+                  "description": "Retry/backoff policy for stream reconnect attempts.",
+                  "additionalProperties": false,
+                  "properties": {
+                    "maxAttempts": {
+                      "type": "integer",
+                      "title": "Max Attempts",
+                      "description": "Maximum reconnect attempts before giving up.",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "initialBackoffMs": {
+                      "type": "integer",
+                      "title": "Initial Backoff (ms)",
+                      "description": "Initial reconnect wait time.",
+                      "minimum": 0,
+                      "maximum": 600000
+                    },
+                    "maxBackoffMs": {
+                      "type": "integer",
+                      "title": "Max Backoff (ms)",
+                      "description": "Upper bound for reconnect backoff.",
+                      "minimum": 0,
+                      "maximum": 600000
+                    },
+                    "jitter": {
+                      "type": "boolean",
+                      "title": "Jitter",
+                      "description": "Enable randomized reconnect jitter."
+                    }
+                  },
+                  "required": [
+                    "maxAttempts",
+                    "initialBackoffMs",
+                    "maxBackoffMs",
+                    "jitter"
+                  ]
+                }
+              },
+              "required": [
+                "supported",
+                "transport",
+                "endpointRef",
+                "authMode",
+                "reconnect"
+              ]
+            },
+            "queue": {
+              "type": "object",
+              "title": "Queue Policy",
+              "description": "In-memory queue controls for inflight async work.",
+              "additionalProperties": false,
+              "properties": {
+                "supported": {
+                  "type": "boolean",
+                  "title": "Supported",
+                  "description": "Whether queue controls are enabled."
+                },
+                "maxInflight": {
+                  "type": "integer",
+                  "title": "Max Inflight",
+                  "description": "Maximum number of inflight async operations.",
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "dropPolicy": {
+                  "type": "string",
+                  "title": "Drop Policy",
+                  "description": "Policy used when queue capacity is exceeded.",
+                  "enum": [
+                    "backpressure",
+                    "drop-oldest",
+                    "drop-newest"
+                  ]
+                },
+                "orderingKey": {
+                  "type": "string",
+                  "title": "Ordering Key",
+                  "description": "Key used to preserve per-entity ordering for queued operations."
+                }
+              },
+              "required": [
+                "supported",
+                "maxInflight",
+                "dropPolicy",
+                "orderingKey"
+              ]
+            },
+            "requestChannel": {
+              "type": "string",
+              "title": "Request Channel",
+              "description": "Optional request topic/channel identifier passed into submit templates and events.",
+              "default": "graphql.async.requests.v1"
+            },
+            "responseChannel": {
+              "type": "string",
+              "title": "Response Channel",
+              "description": "Optional response topic/channel identifier passed into stream templates and events.",
+              "default": "graphql.async.responses.v1"
+            },
+            "correlationIdPath": {
+              "type": "string",
+              "title": "Correlation Id Path",
+              "description": "Fallback dot-path used to resolve request id when extracting async correlation values.",
+              "default": "publish_async_request.request_id"
+            }
+          },
+          "required": [
+            "enabled",
+            "mode",
+            "request",
+            "stream",
+            "queue"
+          ]
+        },
+        "input": {
+          "type": "object",
+          "title": "Input Defaults",
+          "description": "Optional initial runtime input payload.",
+          "additionalProperties": true
+        },
+        "ui": {
+          "type": "object",
+          "title": "UI Configuration",
+          "description": "Optional UI-level configuration for this module.",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "title",
+        "inputPlaceholder",
+        "submitLabel",
+        "assistantLabel",
+        "maxMessages",
+        "requestCommand",
+        "graphql",
+        "async"
+      ]
+    },
+    "events_out": [
+      {
+        "name": "mfe.example.chat.submitted",
+        "payload_schema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "mode": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ]
+        },
+        "async_allowed": true
+      },
+      {
+        "name": "mfe.example.chat.responded",
+        "payload_schema": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "async_allowed": true
+      }
+    ],
+    "commands_in": [
+      {
+        "name": "mfe.example.chat.send",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ]
+        },
+        "timeout_ms": 60000
+      }
+    ]
+  },
+  "async": {
+    "enabled": true,
+    "mode": "mixed",
+    "request": {
+      "supported": true,
+      "default_timeout_ms": 30000,
+      "retry": {
+        "max_attempts": 2,
+        "initial_backoff_ms": 250,
+        "max_backoff_ms": 2000,
+        "jitter": true
+      }
+    },
+    "stream": {
+      "supported": true,
+      "transport": "graphql-ws",
+      "endpoint_ref": "GRAPHQL_STREAM_ENDPOINT",
+      "auth_mode": "inherit",
+      "reconnect": {
+        "max_attempts": 10,
+        "initial_backoff_ms": 500,
+        "max_backoff_ms": 10000,
+        "jitter": true
+      }
+    },
+    "queue": {
+      "supported": true,
+      "max_inflight": 64,
+      "drop_policy": "backpressure",
+      "ordering_key": "instance_id"
+    }
+  },
+  "capabilities": {
+    "network": true,
+    "storage": false,
+    "navigation": false,
+    "sensors": false,
+    "notifications": false,
+    "background_tasks": false
+  },
+  "lifecycle": {
+    "hooks": [
+      "init",
+      "mount",
+      "update",
+      "handleCommand",
+      "unmount"
+    ],
+    "supports_hydration": true,
+    "supports_suspend": false
+  },
+  "compatibility": {
+    "min_host_contract_version": "1.0.0",
+    "breaking_change_policy": "semver-major"
+  }
+}

@@ -1,0 +1,7 @@
+node_modules
+dist
+npm-debug.log*
+dev-dist
+.env*
+!.env.local.example
+!.env.production.example

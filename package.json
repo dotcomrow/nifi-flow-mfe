@@ -1,0 +1,26 @@
+{
+  "name": "@suncoast/example-mfe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Example MFE package that follows the Suncoast module contract and builds to a single JS artifact.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "clean:dev": "rm -rf dev-dist",
+    "typecheck": "tsc --noEmit",
+    "build:bundle": "node scripts/build.mjs",
+    "build:definition": "mkdir -p dist && cp module.definition.json dist/module.definition.json",
+    "build": "npm run clean && npm run typecheck && npm run build:bundle && npm run build:definition",
+    "dev": "npm run clean:dev && node scripts/dev.mjs",
+    "sync:directus": "node scripts/sync-directus-module.mjs",
+    "publish:registry": "node scripts/publish-registry.mjs",
+    "notify:catalog": "node scripts/notify-catalog-service.mjs"
+  },
+  "devDependencies": {
+    "dotenv": "^16.6.1",
+    "esbuild": "^0.25.9",
+    "graphql-ws": "^5.16.0",
+    "typescript": "^5.9.2"
+  }
+}

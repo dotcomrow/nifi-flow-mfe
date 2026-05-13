@@ -1,0 +1,91 @@
+{
+  "title": "AI Assistant",
+  "inputPlaceholder": "Ask a question...",
+  "submitLabel": "Send",
+  "assistantLabel": "AI",
+  "maxMessages": 40,
+  "requestCommand": "mfe.example.chat.send",
+  "graphql": {
+    "httpUrl": "",
+    "wsUrl": "",
+    "authToken": "",
+    "hasuraRole": "",
+    "tokenExchange": {
+      "enabled": false,
+      "requestedAudience": "",
+      "requestedAudiences": [],
+      "requestedScope": "",
+      "exchangeUrl": "",
+      "appSlug": "",
+      "tokenUrl": "",
+      "clientId": ""
+    },
+    "submitMutation": "mutation PublishAsyncRequest($input: json!) { publish_async_request(input: $input) }",
+    "submitVariables": {
+      "input": {
+        "handler": "ai-service",
+        "operation": "chat.completion",
+        "payload": {
+          "prompt": "{{prompt}}",
+          "conversationId": "{{conversationId}}"
+        },
+        "metadata": {
+          "moduleKey": "{{moduleKey}}",
+          "instanceId": "{{instanceId}}",
+          "source": "{{source}}",
+          "asyncMode": "{{asyncMode}}",
+          "requestChannel": "{{requestChannel}}",
+          "responseChannel": "{{responseChannel}}",
+          "correlationIdPath": "{{correlationIdPath}}"
+        },
+        "expires_in_seconds": 86400
+      }
+    },
+    "submitRequestIdPath": "publish_async_request.request_id",
+    "streamSubscription": "subscription StreamClientAsyncMessage($requestId: String!, $responseChannel: String!) { graphql_client_async_messages(where: { _and: [{ request_id: { _eq: $requestId } }, { kafka_topic: { _eq: $responseChannel } }] }, order_by: { updated_at: desc }, limit: 1) { request_id status response_payload error_payload completed_at updated_at } }",
+    "streamVariables": {
+      "requestId": "{{requestId}}",
+      "responseChannel": "{{responseChannel}}"
+    },
+    "streamTextPath": "graphql_client_async_messages.0.response_payload",
+    "streamDonePath": "graphql_client_async_messages.0.status",
+    "streamErrorPath": "graphql_client_async_messages.0.error_payload",
+    "streamChunkMode": "replace",
+    "conversationId": ""
+  },
+  "async": {
+    "enabled": true,
+    "mode": "kafka-graphql-bridge",
+    "requestChannel": "graphql.async.requests.v1",
+    "responseChannel": "graphql.async.responses.v1",
+    "correlationIdPath": "publish_async_request.request_id",
+    "request": {
+      "supported": true,
+      "defaultTimeoutMs": 30000,
+      "retry": {
+        "maxAttempts": 2,
+        "initialBackoffMs": 250,
+        "maxBackoffMs": 2000,
+        "jitter": true
+      }
+    },
+    "stream": {
+      "supported": true,
+      "transport": "graphql-ws",
+      "endpointRef": "GRAPHQL_STREAM_ENDPOINT",
+      "authMode": "inherit",
+      "reconnect": {
+        "maxAttempts": 10,
+        "initialBackoffMs": 500,
+        "maxBackoffMs": 10000,
+        "jitter": true
+      }
+    },
+    "queue": {
+      "supported": true,
+      "maxInflight": 64,
+      "dropPolicy": "backpressure",
+      "orderingKey": "instance_id"
+    }
+  }
+}
