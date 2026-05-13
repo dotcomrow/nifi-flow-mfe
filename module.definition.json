@@ -1,10 +1,10 @@
 {
   "contract_version": "1.0.0",
-  "module_key": "mfe-example-chat",
+  "module_key": "mfe-nifi-flow-runner",
   "module_version": "0.1.0",
   "kind": "mfe",
-  "display_name": "MFE Example Chat (GraphQL Stream)",
-  "description": "Example MFE chat input that submits prompt over GraphQL mutation and receives response over GraphQL stream subscription.",
+  "display_name": "NiFi Flow Runner MFE (GraphQL Stream)",
+  "description": "MFE form that submits a message + parameters over GraphQL mutation and streams the flow result response.",
   "targets": [
     "web"
   ],
@@ -12,7 +12,7 @@
     "mode": "inline",
     "preload": "lazy",
     "entry": {
-      "web_package": "dist/example-mfe.js",
+      "web_package": "dist/nifi-flow-mfe.js",
       "export_name": "createModule"
     }
   },
@@ -23,29 +23,49 @@
     "slots_out": [],
     "props_schema": {
       "type": "object",
-      "title": "Chat Module Props",
-      "description": "Configuration for the Example Chat MFE runtime and GraphQL transport.",
+      "title": "NiFi Flow Runner Props",
+      "description": "Configuration for the NiFi Flow Runner MFE runtime and GraphQL transport.",
       "additionalProperties": false,
       "properties": {
         "title": {
           "type": "string",
           "title": "Title",
-          "description": "Header text shown at the top of the chat module."
+          "description": "Header text shown at the top of the flow runner module."
         },
         "inputPlaceholder": {
           "type": "string",
           "title": "Input Placeholder",
-          "description": "Placeholder text shown inside the prompt input."
+          "description": "Placeholder text shown inside the message input."
+        },
+        "parametersLabel": {
+          "type": "string",
+          "title": "Parameters Label",
+          "description": "Label shown above the parameters JSON field."
+        },
+        "parametersPlaceholder": {
+          "type": "string",
+          "title": "Parameters Placeholder",
+          "description": "Placeholder text shown in the parameters JSON field."
+        },
+        "defaultParametersJson": {
+          "type": "string",
+          "title": "Default Parameters JSON",
+          "description": "Initial JSON object value for the parameters field."
+        },
+        "resultLabel": {
+          "type": "string",
+          "title": "Result Label",
+          "description": "Label shown above the result payload panel."
         },
         "submitLabel": {
           "type": "string",
           "title": "Submit Label",
-          "description": "Button label used to submit a prompt."
+          "description": "Button label used to submit a flow request."
         },
         "assistantLabel": {
           "type": "string",
           "title": "Assistant Label",
-          "description": "Display name used for assistant response messages."
+          "description": "Display name used for flow response messages."
         },
         "maxMessages": {
           "type": "integer",
@@ -57,7 +77,7 @@
         "requestCommand": {
           "type": "string",
           "title": "Request Command",
-          "description": "Command name the host uses to invoke this chat module programmatically."
+          "description": "Command name the host uses to invoke this flow runner module programmatically."
         },
         "graphql": {
           "type": "object",
@@ -148,7 +168,7 @@
             "submitVariables": {
               "type": "object",
               "title": "Submit Variables Template",
-              "description": "JSON template for submit mutation variables. Supports placeholders like {{prompt}} and {{requestId}}.",
+              "description": "JSON template for submit mutation variables. Supports placeholders like {{message}}, {{parameters}}, and {{requestId}}.",
               "additionalProperties": true
             },
             "submitRequestIdPath": {
@@ -480,7 +500,7 @@
     },
     "events_out": [
       {
-        "name": "mfe.example.chat.submitted",
+        "name": "mfe.nifi.flow.runner.submitted",
         "payload_schema": {
           "type": "object",
           "properties": {
@@ -498,7 +518,7 @@
         "async_allowed": true
       },
       {
-        "name": "mfe.example.chat.responded",
+        "name": "mfe.nifi.flow.runner.responded",
         "payload_schema": {
           "type": "object",
           "properties": {
@@ -518,7 +538,7 @@
     ],
     "commands_in": [
       {
-        "name": "mfe.example.chat.send",
+        "name": "mfe.nifi.flow.send",
         "input_schema": {
           "type": "object",
           "properties": {

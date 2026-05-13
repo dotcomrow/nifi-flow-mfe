@@ -58,7 +58,7 @@ async function withGhaOutput(outputs) {
 async function main() {
   const moduleSeed = JSON.parse(await fs.readFile("directus/cms-module.seed.json", "utf8"));
   const moduleDefinition = JSON.parse(await fs.readFile("module.definition.json", "utf8"));
-  const bundleBytes = await fs.readFile("dist/example-mfe.js");
+  const bundleBytes = await fs.readFile("dist/nifi-flow-mfe.js");
 
   const moduleKey = ensureRequired(
     moduleSeed.module_key || moduleDefinition.module_key,
@@ -82,7 +82,7 @@ async function main() {
       sha: releaseSha || null,
     },
     bundle: {
-      file_name: "example-mfe.js",
+      file_name: "nifi-flow-mfe.js",
       sha256: bundleSha256,
       size_bytes: bundleBytes.byteLength,
     },

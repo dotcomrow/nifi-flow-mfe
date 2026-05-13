@@ -73,11 +73,11 @@ jobs:
       - name: Upload Build Artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
-          name: example-mfe-dist
+          name: nifi-flow-mfe-dist
           if-no-files-found: warn
           path: |
-            dist/example-mfe.js
-            dist/example-mfe.js.map
+            dist/nifi-flow-mfe.js
+            dist/nifi-flow-mfe.js.map
             dist/module.definition.json
             dist/module.publish.json
             directus/cms-module.seed.json
@@ -90,8 +90,8 @@ jobs:
         with:
           fail_on_unmatched_files: false
           files: |
-            dist/example-mfe.js
-            dist/example-mfe.js.map
+            dist/nifi-flow-mfe.js
+            dist/nifi-flow-mfe.js.map
             dist/module.definition.json
             dist/module.publish.json
             directus/cms-module.seed.json
@@ -147,7 +147,7 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          name: example-mfe-dist
+          name: nifi-flow-mfe-dist
           path: .
 
       - name: Rebuild Artifact Locally (fallback)
@@ -169,7 +169,7 @@ jobs:
         run: |
           set -euo pipefail
           REQUIRED_FILES=(
-            "dist/example-mfe.js"
+            "dist/nifi-flow-mfe.js"
             "dist/module.publish.json"
             "scripts/notify-catalog-service.mjs"
           )

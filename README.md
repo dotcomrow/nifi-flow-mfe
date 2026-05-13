@@ -1,10 +1,10 @@
-# Example MFE (Suncoast Contract)
+# NiFi Flow MFE (Suncoast Contract)
 
 Example micro-frontend package that:
 
 - follows the Suncoast UI module contract (`module.definition.json`)
 - includes a host adapter for the current shell `CmsModuleDefinition` contract
-- builds to a single browser JS file (`dist/example-mfe.js`)
+- builds to a single browser JS file (`dist/nifi-flow-mfe.js`)
 - provides Directus seed data for `cms_modules`
 - demonstrates GraphQL async communication:
   - submit via GraphQL HTTP mutation
@@ -29,8 +29,8 @@ npm run build
 
 Build output:
 
-- `dist/example-mfe.js` (single-file bundle)
-- `dist/example-mfe.js.map`
+- `dist/nifi-flow-mfe.js` (single-file bundle)
+- `dist/nifi-flow-mfe.js.map`
 - `dist/module.definition.json`
 
 ## GraphQL Runtime Configuration
@@ -51,7 +51,7 @@ Session lifecycle ownership:
 
 Build metadata debug helper (devtools):
 
-- `window.__SUNCOAST_GET_MFE_BUILD_INFO__("mfe-example-chat")`
+- `window.__SUNCOAST_GET_MFE_BUILD_INFO__("mfe-nifi-flow-runner")`
 - Returns compile-time metadata for the loaded bundle (module version, build version, commit, timestamp, mode).
 - `window.__SUNCOAST_GET_MFE_BUILD_INFO__()` returns all loaded MFE build entries by module key.
 - Lookup is exact-key first, then case-insensitive.
@@ -72,7 +72,7 @@ Local preview:
 Supported env vars:
 
 - `MFE_PREVIEW_AUTH_GATEWAY_URL` (preview login gateway, usually `https://login.suncoast.systems`)
-- `MFE_PREVIEW_AUTH_APP_SLUG` (registered app slug in auth-gateway, for example `example-mfe-preview`)
+- `MFE_PREVIEW_AUTH_APP_SLUG` (registered app slug in auth-gateway, for example `nifi-flow-mfe-preview`)
 - `MFE_PREVIEW_AUTH_CODE_PARAM` (query key returned by gateway callback, default `gateway_code`)
 - `MFE_PREVIEW_PORT` (dev only)
 
@@ -91,17 +91,18 @@ If your auth provider returns `access_token` in URL hash (implicit flow), the pr
 
 ## What This MFE Does
 
-- Module key: `mfe-example-chat`
-- Renders a simple textbox + submit button chat UI
-- Submits prompts using GraphQL mutation `publish_async_request`
+- Module key: `mfe-nifi-flow-runner`
+- Renders a form UI for `message` + JSON `parameters`
+- Submits flow requests using GraphQL mutation `publish_async_request`
 - Listens for response row updates from `graphql.client_async_messages` over GraphQL subscription
+- Shows the latest raw submit + stream payload in a result panel
 - Emits module events
 
 ## Directus Setup
 
-1. Host `dist/example-mfe.js` at a URL reachable by your shell runtime.
+1. Host `dist/nifi-flow-mfe.js` at a URL reachable by your shell runtime.
 2. Create/update a `cms_modules` record using `directus/cms-module.seed.json`.
-3. In a `cms_block_module` block, choose module key `mfe-example-chat`.
+3. In a `cms_block_module` block, choose module key `mfe-nifi-flow-runner`.
 4. Use `directus/cms-block-module.props.example.json` as your `props_json` baseline.
 5. Set:
    - optional `graphql.httpUrl` and `graphql.wsUrl` overrides (leave unset to use shell runtime defaults)
@@ -128,7 +129,7 @@ If your auth provider returns `access_token` in URL hash (implicit flow), the pr
      - `graphql.streamDonePath`
      - `graphql.streamErrorPath`
 
-`async.requestChannel`, `async.responseChannel`, and `async.correlationIdPath` are consumed by this example MFE and injected into submit/stream template variables and emitted events.
+`async.requestChannel`, `async.responseChannel`, and `async.correlationIdPath` are consumed by this NiFi Flow MFE and injected into submit/stream template variables and emitted events.
 
 ## Automated Registry Publish (No Directus/GitOps PR Required)
 
@@ -148,7 +149,7 @@ If your auth provider returns `access_token` in URL hash (implicit flow), the pr
 5. Workflow will:
    - build artifacts
    - run `npm run publish:registry` to generate `dist/module.publish.json`
-   - run `npm run notify:catalog` to upload `dist/example-mfe.js` and `dist/module.publish.json` to the registry service
+   - run `npm run notify:catalog` to upload `dist/nifi-flow-mfe.js` and `dist/module.publish.json` to the registry service
    - attach release artifacts in GitHub
 
 `publish:registry` writes metadata in `dist/module.publish.json`:
@@ -181,7 +182,7 @@ If your shell currently only mounts modules from an internal registry, wire this
 
 The bundle also self-registers at:
 
-- `globalThis.SuncoastMfeRegistry["mfe-example-chat"]`
+- `globalThis.SuncoastMfeRegistry["mfe-nifi-flow-runner"]`
 
 ## Scripts
 

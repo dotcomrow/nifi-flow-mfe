@@ -45,8 +45,8 @@ await build({
   platform: "browser",
   target: "es2020",
   format: "iife",
-  globalName: "ExampleMfeBundle",
-  outfile: "dist/example-mfe.js",
+  globalName: "NifiFlowMfeBundle",
+  outfile: "dist/nifi-flow-mfe.js",
   sourcemap: true,
   minify: mode === "production",
   define: asEsbuildDefines(env, {

@@ -41,6 +41,10 @@ type GraphqlTokenExchangeConfig = {
 type ChatProps = {
   title: string;
   inputPlaceholder: string;
+  parametersLabel: string;
+  parametersPlaceholder: string;
+  defaultParametersJson: string;
+  resultLabel: string;
   submitLabel: string;
   assistantLabel: string;
   maxMessages: number;
@@ -48,6 +52,8 @@ type ChatProps = {
   async: ModuleAsyncConfig;
   graphql: GraphqlConfig;
 };
+
+type TemplateVariables = Record<string, JsonValue>;
 
 const defaultAsyncConfig: ModuleAsyncConfig = {
   enabled: true,
@@ -747,6 +753,20 @@ function toJsonValue(value: unknown): JsonValue {
   return String(value);
 }
 
+function toTemplateString(value: JsonValue): string {
+  if (value === null) {
+    return "";
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "";
+  }
+}
+
 function parseTemplateValue(value: unknown): JsonValue {
   if (value === null) {
     return null;
@@ -768,10 +788,16 @@ function parseTemplateValue(value: unknown): JsonValue {
   return String(value);
 }
 
-function applyTemplate(value: JsonValue, variables: Record<string, string>): JsonValue {
+function applyTemplate(value: JsonValue, variables: TemplateVariables): JsonValue {
   if (typeof value === "string") {
+    const wholePlaceholder = value.match(/^\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}$/);
+    if (wholePlaceholder) {
+      const key = wholePlaceholder[1] || "";
+      return key in variables ? variables[key] ?? "" : "";
+    }
     return value.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_, key: string) => {
-      return variables[key] ?? "";
+      const replacement = key in variables ? variables[key] : "";
+      return toTemplateString(replacement ?? "");
     });
   }
   if (Array.isArray(value)) {
@@ -785,6 +811,29 @@ function applyTemplate(value: JsonValue, variables: Record<string, string>): Jso
     return out;
   }
   return value;
+}
+
+function parseParametersJson(value: string): JsonObject {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return {};
+  }
+  const parsed = JSON.parse(trimmed) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Parameters must be a JSON object.");
+  }
+  return toJsonValue(parsed) as JsonObject;
+}
+
+function buildParameterTemplateVariables(parameters: JsonObject): TemplateVariables {
+  const out: TemplateVariables = {
+    parameters,
+    parametersJson: toTemplateString(parameters),
+  };
+  for (const [key, value] of Object.entries(parameters)) {
+    out[`param.${key}`] = value;
+  }
+  return out;
 }
 
 function asPathParts(path: string): string[] {
@@ -907,10 +956,11 @@ function normalizeGraphqlConfig(rawProps: Record<string, unknown>, asyncConfig: 
     submitVariables: parseTemplateValue(
       graphql.submitVariables ?? {
         input: {
-          handler: "ai-service",
-          operation: "chat.completion",
+          handler: "batch-dataflow",
+          operation: "nifi.flow.invoke",
           payload: {
-            prompt: "{{prompt}}",
+            message: "{{prompt}}",
+            parameters: "{{parameters}}",
             conversationId: "{{conversationId}}",
           },
           metadata: {
@@ -954,16 +1004,28 @@ function normalizeGraphqlConfig(rawProps: Record<string, unknown>, asyncConfig: 
 
 export function resolveChatProps(rawProps: unknown, inheritedAsync?: ModuleAsyncConfig): ChatProps {
   const props = asRecord(rawProps);
-  const defaultTitle = "Example Chat MFE";
-  const defaultInput = "Ask AI...";
-  const defaultSubmit = "Submit";
-  const defaultAssistant = "Assistant";
-  const defaultCommand = "mfe.example.chat.send";
+  const defaultTitle = "NiFi Flow Runner";
+  const defaultInput = "Enter message payload...";
+  const defaultParametersLabel = "Parameters (JSON object)";
+  const defaultParametersPlaceholder = "{\n  \"tenant\": \"internal\",\n  \"priority\": \"normal\"\n}";
+  const defaultParametersJson = "{\n  \"tenant\": \"internal\",\n  \"priority\": \"normal\"\n}";
+  const defaultResultLabel = "Latest Result";
+  const defaultSubmit = "Run Flow";
+  const defaultAssistant = "Flow Result";
+  const defaultCommand = "mfe.nifi.flow.send";
   const normalizedAsync = normalizeAsyncConfig(props.async, inheritedAsync);
 
   return {
     title: asString(props.title, defaultTitle).trim() || defaultTitle,
     inputPlaceholder: asString(props.inputPlaceholder, defaultInput).trim() || defaultInput,
+    parametersLabel:
+      asString(props.parametersLabel, defaultParametersLabel).trim() || defaultParametersLabel,
+    parametersPlaceholder:
+      asString(props.parametersPlaceholder, defaultParametersPlaceholder).trim() ||
+      defaultParametersPlaceholder,
+    defaultParametersJson:
+      asString(props.defaultParametersJson, defaultParametersJson).trim() || defaultParametersJson,
+    resultLabel: asString(props.resultLabel, defaultResultLabel).trim() || defaultResultLabel,
     submitLabel: asString(props.submitLabel, defaultSubmit).trim() || defaultSubmit,
     assistantLabel: asString(props.assistantLabel, defaultAssistant).trim() || defaultAssistant,
     maxMessages: asInteger(props.maxMessages, 20, 1, 200),
@@ -1014,12 +1076,17 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
   let pendingRequest = false;
   let formEl: HTMLFormElement | null = null;
   let inputEl: HTMLInputElement | null = null;
+  let paramsEl: HTMLTextAreaElement | null = null;
   let submitEl: HTMLButtonElement | null = null;
   let listEl: HTMLDivElement | null = null;
+  let resultEl: HTMLPreElement | null = null;
   let statusEl: HTMLDivElement | null = null;
+  let statusBadgeEl: HTMLSpanElement | null = null;
+  let statusDotEl: HTMLSpanElement | null = null;
   let activeDispose: (() => void) | null = null;
   let detachAuthLogoutListeners: (() => void) | null = null;
   let tokenExchangeCache: TokenExchangeCacheEntry | null = null;
+  let healthState: "idle" | "running" | "ok" | "error" = "idle";
 
   const resolveRuntimeGraphql = (): RuntimeGraphqlConfig => {
     const runtimeFromContext = asRecord(ctx.environment?.graphql);
@@ -1231,6 +1298,7 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
     tokenExchangeCache = null;
     clearActiveSubscription();
     setPending(false);
+    setHealth("idle", "Signed Out");
     if (inputEl) {
       inputEl.value = "";
     }
@@ -1255,27 +1323,301 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
     };
   };
 
+  const ensureStyles = () => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const styleId = "nifi-flow-mfe-runner-styles-v1";
+    if (document.getElementById(styleId)) {
+      return;
+    }
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = `
+.nifi-runner-shell {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: 0.95rem;
+  width: 100%;
+  max-width: 1080px;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, ${THEME_COLOR.border} 86%, #38bdf8);
+  border-radius: 16px;
+  background:
+    radial-gradient(130% 120% at 0% 0%, color-mix(in srgb, ${THEME_COLOR.accent} 16%, transparent), transparent 62%),
+    radial-gradient(110% 120% at 100% 100%, color-mix(in srgb, #f59e0b 13%, transparent), transparent 60%),
+    linear-gradient(135deg, color-mix(in srgb, ${THEME_COLOR.surface} 90%, #0ea5e9 10%), ${THEME_COLOR.surface});
+  color: ${THEME_COLOR.text};
+  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.16);
+  box-sizing: border-box;
+}
+.nifi-runner-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 16px;
+  background-image:
+    linear-gradient(90deg, color-mix(in srgb, ${THEME_COLOR.border} 40%, transparent) 1px, transparent 1px),
+    linear-gradient(0deg, color-mix(in srgb, ${THEME_COLOR.border} 40%, transparent) 1px, transparent 1px);
+  background-size: 18px 18px;
+  opacity: 0.22;
+}
+.nifi-runner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+.nifi-runner-title {
+  margin: 0;
+  font-size: 1.12rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+.nifi-runner-subtitle {
+  margin: 0.22rem 0 0;
+  font-size: 0.81rem;
+  color: ${THEME_COLOR.muted};
+}
+.nifi-runner-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  border: 1px solid color-mix(in srgb, ${THEME_COLOR.border} 82%, transparent);
+  border-radius: 999px;
+  padding: 0.28rem 0.68rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, ${THEME_COLOR.elevated} 80%, transparent);
+}
+.nifi-runner-health-dot {
+  width: 0.58rem;
+  height: 0.58rem;
+  border-radius: 50%;
+  background: #94a3b8;
+  box-shadow: 0 0 0 0 rgba(148, 163, 184, 0.7);
+}
+.nifi-runner-health[data-state="running"] .nifi-runner-health-dot {
+  background: #f59e0b;
+  animation: nifiPulse 1.4s ease-out infinite;
+}
+.nifi-runner-health[data-state="ok"] .nifi-runner-health-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55);
+}
+.nifi-runner-health[data-state="error"] .nifi-runner-health-dot {
+  background: #ef4444;
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.58);
+}
+.nifi-runner-map {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.5rem;
+  align-items: center;
+}
+.nifi-stage-card {
+  display: grid;
+  gap: 0.25rem;
+  min-height: 70px;
+  padding: 0.55rem 0.62rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, ${THEME_COLOR.border} 80%, #38bdf8 20%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, ${THEME_COLOR.surface} 85%, #ffffff 15%),
+    color-mix(in srgb, ${THEME_COLOR.elevated} 82%, #e0f2fe 18%)
+  );
+}
+.nifi-stage-card > strong {
+  font-size: 0.76rem;
+  line-height: 1.15;
+}
+.nifi-stage-card > span {
+  font-size: 0.69rem;
+  color: ${THEME_COLOR.muted};
+  line-height: 1.25;
+}
+.nifi-stage-link {
+  text-align: center;
+  font-size: 1.02rem;
+  color: color-mix(in srgb, ${THEME_COLOR.accent} 72%, #0891b2);
+  opacity: 0.92;
+}
+.nifi-runner-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) minmax(320px, 1fr);
+  gap: 0.9rem;
+}
+.nifi-panel {
+  display: grid;
+  gap: 0.56rem;
+  padding: 0.76rem;
+  border: 1px solid color-mix(in srgb, ${THEME_COLOR.border} 86%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, ${THEME_COLOR.surface} 88%, #e2e8f0 12%);
+}
+.nifi-panel-title {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.nifi-field {
+  display: grid;
+  gap: 0.34rem;
+}
+.nifi-field > label {
+  font-size: 0.76rem;
+  color: ${THEME_COLOR.muted};
+}
+.nifi-input,
+.nifi-textarea {
+  border: 1px solid color-mix(in srgb, ${THEME_COLOR.border} 82%, #0ea5e9 18%);
+  border-radius: 9px;
+  background: color-mix(in srgb, ${THEME_COLOR.surface} 95%, #ffffff 5%);
+  color: ${THEME_COLOR.text};
+  padding: 0.5rem 0.62rem;
+}
+.nifi-input {
+  min-height: 2.2rem;
+}
+.nifi-textarea {
+  min-height: 7.25rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.nifi-submit {
+  justify-self: start;
+  min-height: 2.2rem;
+  min-width: 8.7rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, ${THEME_COLOR.accent} 68%, #0ea5e9);
+  background: linear-gradient(135deg, ${THEME_COLOR.accent}, #0284c7);
+  color: ${THEME_COLOR.onAccent};
+  font-size: 0.81rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  padding: 0.46rem 0.9rem;
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+.nifi-submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(2, 132, 199, 0.26);
+}
+.nifi-submit:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.nifi-status {
+  font-size: 0.78rem;
+  color: ${THEME_COLOR.muted};
+}
+.nifi-log {
+  display: grid;
+  gap: 0.48rem;
+  max-height: 13rem;
+  overflow: auto;
+  padding: 0.24rem;
+}
+.nifi-log-line {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.46rem 0.56rem;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, ${THEME_COLOR.border} 88%, transparent);
+  background: color-mix(in srgb, ${THEME_COLOR.elevated} 92%, #e2e8f0 8%);
+}
+.nifi-log-line[data-role="user"] {
+  border-color: color-mix(in srgb, #0ea5e9 34%, ${THEME_COLOR.border});
+  background: color-mix(in srgb, #e0f2fe 78%, ${THEME_COLOR.elevated});
+}
+.nifi-log-line[data-role="assistant"] {
+  border-color: color-mix(in srgb, #22c55e 30%, ${THEME_COLOR.border});
+  background: color-mix(in srgb, #dcfce7 78%, ${THEME_COLOR.elevated});
+}
+.nifi-log-line[data-role="system"] {
+  border-color: color-mix(in srgb, #f59e0b 34%, ${THEME_COLOR.border});
+  background: color-mix(in srgb, #fef3c7 80%, ${THEME_COLOR.elevated});
+}
+.nifi-log-line strong {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.nifi-log-line pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 0.79rem;
+}
+.nifi-result {
+  margin: 0;
+  min-height: 14rem;
+  max-height: 28rem;
+  overflow: auto;
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, ${THEME_COLOR.border} 86%, #0ea5e9 14%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #020617 95%, #0c4a6e 5%),
+    #020617
+  );
+  color: #c7f9ff;
+  font-size: 0.79rem;
+  line-height: 1.36;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+@keyframes nifiPulse {
+  0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.62); }
+  70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+@media (max-width: 980px) {
+  .nifi-runner-map { grid-template-columns: 1fr; }
+  .nifi-stage-link { transform: rotate(90deg); }
+  .nifi-runner-grid { grid-template-columns: 1fr; }
+}
+`;
+    document.head.append(style);
+  };
+
+  const setHealth = (state: "idle" | "running" | "ok" | "error", label?: string) => {
+    healthState = state;
+    if (statusBadgeEl) {
+      statusBadgeEl.dataset.state = state;
+      statusBadgeEl.setAttribute("data-state", state);
+      statusBadgeEl.title = label || "";
+      statusBadgeEl.lastChild && (statusBadgeEl.lastChild.textContent = label || state);
+    }
+    if (statusDotEl) {
+      statusDotEl.dataset.state = state;
+    }
+  };
+
   const appendLine = (role: "user" | "assistant" | "system", text: string) => {
     if (!listEl) {
       return;
     }
-    const item = document.createElement("div");
+    const item = document.createElement("article");
+    item.className = "nifi-log-line";
     item.setAttribute("data-role", role);
-    item.style.display = "grid";
-    item.style.gap = "0.25rem";
-    item.style.padding = "0.45rem 0.55rem";
-    item.style.border = `1px solid ${THEME_COLOR.border}`;
-    item.style.borderRadius = "8px";
-    item.style.background =
-      role === "user"
-        ? THEME_COLOR.elevated
-        : role === "assistant"
-          ? THEME_COLOR.surface
-          : THEME_COLOR.elevated;
-    item.style.color = THEME_COLOR.text;
+
     const label = document.createElement("strong");
     label.textContent = role === "user" ? "You" : role === "assistant" ? props.assistantLabel : "System";
-    const body = document.createElement("div");
+    const body = document.createElement("pre");
     body.textContent = text;
     item.append(label, body);
     listEl.append(item);
@@ -1290,15 +1632,9 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
     if (!listEl) {
       return null as HTMLDivElement | null;
     }
-    const item = document.createElement("div");
+    const item = document.createElement("article");
+    item.className = "nifi-log-line";
     item.setAttribute("data-role", "assistant");
-    item.style.display = "grid";
-    item.style.gap = "0.25rem";
-    item.style.padding = "0.45rem 0.55rem";
-    item.style.border = `1px solid ${THEME_COLOR.border}`;
-    item.style.borderRadius = "8px";
-    item.style.background = THEME_COLOR.surface;
-    item.style.color = THEME_COLOR.text;
     const label = document.createElement("strong");
     label.textContent = props.assistantLabel;
     const body = document.createElement("div");
@@ -1314,15 +1650,37 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
       return;
     }
     statusEl.textContent = message;
+    if (statusBadgeEl && healthState !== "running") {
+      statusBadgeEl.title = message;
+    }
+  };
+
+  const setResult = (value: unknown) => {
+    if (!resultEl) {
+      return;
+    }
+    try {
+      resultEl.textContent = JSON.stringify(value, null, 2);
+    } catch {
+      resultEl.textContent = asString(value);
+    }
   };
 
   const setPending = (nextValue: boolean) => {
     pendingRequest = nextValue;
+    if (nextValue) {
+      setHealth("running", "Running");
+    } else if (healthState === "running") {
+      setHealth("ok", "Ready");
+    }
     if (submitEl) {
       submitEl.disabled = nextValue;
     }
     if (inputEl) {
       inputEl.disabled = nextValue;
+    }
+    if (paramsEl) {
+      paramsEl.disabled = nextValue;
     }
   };
 
@@ -1363,7 +1721,11 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
     requestId: string,
     assistantBody: HTMLDivElement | null,
     graphql: GraphqlConfig,
-  ): Promise<void> => {
+  ): Promise<{
+    lastPayload: unknown;
+    lastError: string;
+    lastStatus: string;
+  }> => {
     if (!graphql.wsUrl) {
       throw new Error("Missing graphql.wsUrl.");
     }
@@ -1383,9 +1745,16 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
     });
     const streamVariables = asRecord(templateVariables);
 
-    await new Promise<void>((resolve, reject) => {
+    return new Promise<{
+      lastPayload: unknown;
+      lastError: string;
+      lastStatus: string;
+    }>((resolve, reject) => {
       let settled = false;
       let buffer = "";
+      let lastPayload: unknown = null;
+      let lastError = "";
+      let lastStatus = "";
       const connectionHeaders: Record<string, string> = {};
       if (graphql.authToken) {
         connectionHeaders.authorization = `Bearer ${graphql.authToken}`;
@@ -1408,7 +1777,7 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
         }
         settled = true;
         clearActiveSubscription();
-        resolve();
+        resolve({ lastPayload, lastError, lastStatus });
       };
 
       const settleReject = (error: unknown) => {
@@ -1438,9 +1807,12 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
               return;
             }
             const data = "data" in payload ? (payload.data as Record<string, unknown>) : {};
+            lastPayload = data;
             const nextText = toDisplayText(getPathValue(data, graphql.streamTextPath)).trim();
             const doneValue = getPathValue(data, graphql.streamDonePath);
             const errorValue = toDisplayText(getPathValue(data, graphql.streamErrorPath)).trim();
+            lastError = errorValue;
+            lastStatus = asString(doneValue).trim();
 
             if (errorValue) {
               settleReject(new Error(errorValue));
@@ -1505,10 +1877,19 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
     });
   };
 
-  const submitMessage = async (text: string) => {
-    appendLine("user", text);
-    emitEvent(ctx, "mfe.example.chat.submitted", {
-      text,
+  const submitMessage = async (message: string, parameters: JsonObject) => {
+    const paramsText = toTemplateString(parameters) || "{}";
+    appendLine("user", `Message: ${message}\nParameters: ${paramsText}`);
+    setResult({
+      request: {
+        message,
+        parameters,
+      },
+      state: "submitting",
+    });
+    emitEvent(ctx, "mfe.nifi.flow.runner.submitted", {
+      text: message,
+      parameters,
       mode: asString(props.async.mode) || defaultAsyncConfig.mode,
       requestChannel: props.async.requestChannel || "",
       responseChannel: props.async.responseChannel || "",
@@ -1532,11 +1913,13 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
     const assistantBody = appendAssistantPendingLine();
     try {
       setPending(true);
-      setStatus("Submitting prompt...");
+      setStatus("Submitting flow request...");
       const graphql = await resolveGraphqlForRequest(runtimeGraphql);
+      const parameterVariables = buildParameterTemplateVariables(parameters);
 
       const submitVariables = applyTemplate(graphql.submitVariables, {
-        prompt: text,
+        prompt: message,
+        message,
         conversationId: graphql.conversationId,
         moduleKey: ctx.moduleKey,
         instanceId: ctx.instanceId,
@@ -1547,6 +1930,7 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
         requestChannel: props.async.requestChannel || "",
         responseChannel: props.async.responseChannel || "",
         correlationIdPath: props.async.correlationIdPath || "",
+        ...parameterVariables,
       });
 
       const submitData = await executeGraphqlHttp<Record<string, unknown>>(
@@ -1580,10 +1964,17 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
           channelSummary ? ` [${channelSummary}]` : ""
         }...`,
       );
-      await subscribeForStream(requestId, assistantBody, graphql);
+      const streamResult = await subscribeForStream(requestId, assistantBody, graphql);
       setStatus("Response stream completed.");
-      emitEvent(ctx, "mfe.example.chat.responded", {
+      setHealth("ok", "Completed");
+      setResult({
         requestId,
+        submitResponse: submitData,
+        streamResult,
+      });
+      emitEvent(ctx, "mfe.nifi.flow.runner.responded", {
+        requestId,
+        parameters,
         source: asString(props.async.mode) || defaultAsyncConfig.mode,
         requestChannel: props.async.requestChannel || "",
         responseChannel: props.async.responseChannel || "",
@@ -1596,6 +1987,11 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
         appendLine("system", `Error: ${message}`);
       }
       setStatus("Request failed.");
+      setHealth("error", "Failed");
+      setResult({
+        error: message,
+        state: "failed",
+      });
     } finally {
       clearActiveSubscription();
       setPending(false);
@@ -1604,33 +2000,164 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
 
   const render = () => {
     host.innerHTML = "";
+    ensureStyles();
 
-    const container = document.createElement("section");
-    container.setAttribute("data-example-mfe", "chat");
-    container.style.display = "grid";
-    container.style.gap = "0.75rem";
-    container.style.width = "100%";
-    container.style.maxWidth = "44rem";
-    container.style.padding = "0.875rem";
-    container.style.border = `1px solid ${THEME_COLOR.border}`;
-    container.style.borderRadius = "10px";
-    container.style.background = THEME_COLOR.surface;
-    container.style.color = THEME_COLOR.text;
-    container.style.boxSizing = "border-box";
+    const shell = document.createElement("section");
+    shell.setAttribute("data-nifi-flow-mfe", "runner");
+    shell.className = "nifi-runner-shell";
 
     const header = document.createElement("header");
-    header.style.display = "grid";
-    header.style.gap = "0.25rem";
+    header.className = "nifi-runner-header";
 
+    const headingGroup = document.createElement("div");
     const titleEl = document.createElement("h3");
-    titleEl.style.margin = "0";
-    titleEl.style.fontSize = "1rem";
-    titleEl.style.fontWeight = "700";
+    titleEl.className = "nifi-runner-title";
     titleEl.textContent = props.title;
+    const subtitleEl = document.createElement("p");
+    subtitleEl.className = "nifi-runner-subtitle";
+    subtitleEl.textContent = "Message + parameter orchestration through GraphQL async bridge";
+    headingGroup.append(titleEl, subtitleEl);
 
+    statusBadgeEl = document.createElement("span");
+    statusBadgeEl.className = "nifi-runner-health";
+    statusDotEl = document.createElement("span");
+    statusDotEl.className = "nifi-runner-health-dot";
+    const statusBadgeText = document.createElement("span");
+    statusBadgeText.textContent = "Ready";
+    statusBadgeEl.append(statusDotEl, statusBadgeText);
+
+    header.append(headingGroup, statusBadgeEl);
+
+    const map = document.createElement("div");
+    map.className = "nifi-runner-map";
+
+    const stage = (name: string, detail: string) => {
+      const card = document.createElement("div");
+      card.className = "nifi-stage-card";
+      const heading = document.createElement("strong");
+      heading.textContent = name;
+      const text = document.createElement("span");
+      text.textContent = detail;
+      card.append(heading, text);
+      return card;
+    };
+
+    const link = () => {
+      const arrow = document.createElement("div");
+      arrow.className = "nifi-stage-link";
+      arrow.textContent = "→";
+      return arrow;
+    };
+
+    map.append(
+      stage("Input", "Message + JSON parameters"),
+      link(),
+      stage("Flink Stage 1", "Topic consume + rule route"),
+      link(),
+      stage("NiFi Stage", "Flow processing + API calls"),
+      link(),
+      stage("Output", "Kafka response stream"),
+    );
+
+    const grid = document.createElement("div");
+    grid.className = "nifi-runner-grid";
+
+    const left = document.createElement("div");
+    left.style.display = "grid";
+    left.style.gap = "0.9rem";
+
+    const requestPanel = document.createElement("section");
+    requestPanel.className = "nifi-panel";
+    const requestTitle = document.createElement("h4");
+    requestTitle.className = "nifi-panel-title";
+    requestTitle.textContent = "Flow Request Builder";
     statusEl = document.createElement("div");
-    statusEl.style.fontSize = "0.78rem";
-    statusEl.style.color = THEME_COLOR.muted;
+    statusEl.className = "nifi-status";
+
+    formEl = document.createElement("form");
+    formEl.style.display = "grid";
+    formEl.style.gap = "0.56rem";
+
+    const messageField = document.createElement("div");
+    messageField.className = "nifi-field";
+    const messageLabel = document.createElement("label");
+    messageLabel.textContent = "Message";
+    inputEl = document.createElement("input");
+    inputEl.className = "nifi-input";
+    inputEl.type = "text";
+    inputEl.placeholder = props.inputPlaceholder;
+    inputEl.autocomplete = "off";
+    messageField.append(messageLabel, inputEl);
+
+    const parametersField = document.createElement("div");
+    parametersField.className = "nifi-field";
+    const paramsLabel = document.createElement("label");
+    paramsLabel.textContent = props.parametersLabel;
+    paramsEl = document.createElement("textarea");
+    paramsEl.className = "nifi-textarea";
+    paramsEl.placeholder = props.parametersPlaceholder;
+    paramsEl.value = props.defaultParametersJson;
+    parametersField.append(paramsLabel, paramsEl);
+
+    submitEl = document.createElement("button");
+    submitEl.className = "nifi-submit";
+    submitEl.type = "submit";
+    submitEl.textContent = props.submitLabel;
+
+    formEl.append(messageField, parametersField, submitEl);
+    formEl.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (destroyed || pendingRequest || !inputEl || !paramsEl) {
+        return;
+      }
+      const message = inputEl.value.trim();
+      if (!message) {
+        appendLine("system", "Message is required.");
+        return;
+      }
+      let parameters: JsonObject;
+      try {
+        parameters = parseParametersJson(paramsEl.value);
+      } catch (error) {
+        const parseError = describeUnknownError(error) || "Invalid parameters JSON.";
+        appendLine("system", parseError);
+        setStatus("Request blocked due to invalid parameters JSON.");
+        return;
+      }
+      inputEl.value = "";
+      void submitMessage(message, parameters);
+    });
+
+    requestPanel.append(requestTitle, statusEl, formEl);
+
+    const activityPanel = document.createElement("section");
+    activityPanel.className = "nifi-panel";
+    const activityTitle = document.createElement("h4");
+    activityTitle.className = "nifi-panel-title";
+    activityTitle.textContent = "Activity Feed";
+    listEl = document.createElement("div");
+    listEl.className = "nifi-log";
+    activityPanel.append(activityTitle, listEl);
+
+    left.append(requestPanel, activityPanel);
+
+    const right = document.createElement("section");
+    right.className = "nifi-panel";
+    const resultLabel = document.createElement("h4");
+    resultLabel.className = "nifi-panel-title";
+    resultLabel.textContent = props.resultLabel;
+    resultEl = document.createElement("pre");
+    resultEl.className = "nifi-result";
+    setResult({
+      status: "idle",
+      note: "Submit a message to run the flow and view responses.",
+    });
+    right.append(resultLabel, resultEl);
+
+    grid.append(left, right);
+    shell.append(header, map, grid);
+    host.append(shell);
+
     {
       const channelSummary = formatAsyncChannelSummary(props.async);
       setStatus(
@@ -1638,66 +2165,8 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
           channelSummary ? ` [${channelSummary}]` : ""
         }`,
       );
+      setHealth("ok", "Ready");
     }
-
-    header.append(titleEl, statusEl);
-
-    listEl = document.createElement("div");
-    listEl.style.display = "grid";
-    listEl.style.gap = "0.5rem";
-    listEl.style.maxHeight = "14rem";
-    listEl.style.overflow = "auto";
-    listEl.style.padding = "0.2rem";
-    listEl.style.background = THEME_COLOR.elevated;
-    listEl.style.border = `1px solid ${THEME_COLOR.border}`;
-    listEl.style.borderRadius = "8px";
-
-    formEl = document.createElement("form");
-    formEl.style.display = "grid";
-    formEl.style.gridTemplateColumns = "1fr auto";
-    formEl.style.gap = "0.5rem";
-
-    inputEl = document.createElement("input");
-    inputEl.type = "text";
-    inputEl.placeholder = props.inputPlaceholder;
-    inputEl.autocomplete = "off";
-    inputEl.style.minHeight = "2.25rem";
-    inputEl.style.border = `1px solid ${THEME_COLOR.border}`;
-    inputEl.style.borderRadius = "8px";
-    inputEl.style.background = THEME_COLOR.surface;
-    inputEl.style.color = THEME_COLOR.text;
-    inputEl.style.padding = "0.4rem 0.6rem";
-    inputEl.style.fontSize = "0.9rem";
-
-    submitEl = document.createElement("button");
-    submitEl.type = "submit";
-    submitEl.textContent = props.submitLabel;
-    submitEl.style.minWidth = "6rem";
-    submitEl.style.minHeight = "2.25rem";
-    submitEl.style.border = `1px solid ${THEME_COLOR.accent}`;
-    submitEl.style.borderRadius = "8px";
-    submitEl.style.padding = "0.4rem 0.75rem";
-    submitEl.style.fontWeight = "600";
-    submitEl.style.background = THEME_COLOR.accent;
-    submitEl.style.color = THEME_COLOR.onAccent;
-    submitEl.style.cursor = "pointer";
-
-    formEl.append(inputEl, submitEl);
-    formEl.addEventListener("submit", (event) => {
-      event.preventDefault();
-      if (destroyed || pendingRequest || !inputEl) {
-        return;
-      }
-      const text = inputEl.value.trim();
-      if (!text) {
-        return;
-      }
-      inputEl.value = "";
-      void submitMessage(text);
-    });
-
-    container.append(header, listEl, formEl);
-    host.append(container);
   };
 
   return {
@@ -1728,12 +2197,25 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
         return { ok: false, error: `Unsupported command: ${input.name}` };
       }
       const payload = asRecord(input.payload);
-      const text = asString(payload.text).trim();
+      const text = asString(payload.text || payload.message).trim();
       if (!text) {
-        return { ok: false, error: "Missing payload.text" };
+        return { ok: false, error: "Missing payload.message" };
       }
-      await submitMessage(text);
-      return { ok: true, data: toJsonValue({ accepted: true, text }) };
+      let parameters: JsonObject = {};
+      try {
+        if (typeof payload.parameters === "string") {
+          parameters = parseParametersJson(payload.parameters);
+        } else if (payload.parameters && typeof payload.parameters === "object") {
+          parameters = toJsonValue(payload.parameters) as JsonObject;
+        }
+      } catch (error) {
+        return {
+          ok: false,
+          error: describeUnknownError(error) || "Invalid payload.parameters JSON",
+        };
+      }
+      await submitMessage(text, parameters);
+      return { ok: true, data: toJsonValue({ accepted: true, text, parameters }) };
     },
     unmount() {
       destroyed = true;

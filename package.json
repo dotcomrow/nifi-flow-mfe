@@ -1,8 +1,8 @@
 {
-  "name": "@suncoast/example-mfe",
+  "name": "@suncoast/nifi-flow-mfe",
   "version": "0.1.0",
   "private": true,
-  "description": "Example MFE package that follows the Suncoast module contract and builds to a single JS artifact.",
+  "description": "NiFi flow runner MFE package that follows the Suncoast module contract and builds to a single JS artifact.",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {

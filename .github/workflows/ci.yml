@@ -31,10 +31,10 @@ jobs:
       - name: Upload Dist Artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
-          name: example-mfe-dist
+          name: nifi-flow-mfe-dist
           path: |
-            dist/example-mfe.js
-            dist/example-mfe.js.map
+            dist/nifi-flow-mfe.js
+            dist/nifi-flow-mfe.js.map
             dist/module.definition.json
             directus/cms-module.seed.json
             directus/cms-block-module.props.example.json

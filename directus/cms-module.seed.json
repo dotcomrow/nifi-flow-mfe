@@ -1,37 +1,57 @@
 {
-  "module_key": "mfe-example-chat",
-  "name": "MFE Example Chat (GraphQL Stream)",
-  "description": "Example MFE chat field: GraphQL mutation submit + GraphQL stream subscription response.",
+  "module_key": "mfe-nifi-flow-runner",
+  "name": "NiFi Flow Runner MFE (GraphQL Stream)",
+  "description": "Form-driven NiFi flow runner: submit message + parameters over GraphQL mutation and stream results.",
   "provider": "mfe",
-  "component_type": "mfe.example.chat",
+  "component_type": "mfe.nifi.flow.runner",
   "status": "published",
   "site_key": null,
   "refresh_target": "both",
   "props_schema": {
     "type": "object",
-    "title": "Chat Module Props",
-    "description": "Configuration for the Example Chat MFE runtime and GraphQL transport.",
+    "title": "NiFi Flow Runner Props",
+    "description": "Configuration for the NiFi Flow Runner MFE runtime and GraphQL transport.",
     "additionalProperties": false,
     "properties": {
       "title": {
         "type": "string",
         "title": "Title",
-        "description": "Header text shown at the top of the chat module."
+        "description": "Header text shown at the top of the flow runner module."
       },
       "inputPlaceholder": {
         "type": "string",
         "title": "Input Placeholder",
-        "description": "Placeholder text shown inside the prompt input."
+        "description": "Placeholder text shown inside the message input."
+      },
+      "parametersLabel": {
+        "type": "string",
+        "title": "Parameters Label",
+        "description": "Label shown above the parameters JSON field."
+      },
+      "parametersPlaceholder": {
+        "type": "string",
+        "title": "Parameters Placeholder",
+        "description": "Placeholder text shown in the parameters JSON field."
+      },
+      "defaultParametersJson": {
+        "type": "string",
+        "title": "Default Parameters JSON",
+        "description": "Initial JSON object value for the parameters field."
+      },
+      "resultLabel": {
+        "type": "string",
+        "title": "Result Label",
+        "description": "Label shown above the result payload panel."
       },
       "submitLabel": {
         "type": "string",
         "title": "Submit Label",
-        "description": "Button label used to submit a prompt."
+        "description": "Button label used to submit a flow request."
       },
       "assistantLabel": {
         "type": "string",
         "title": "Assistant Label",
-        "description": "Display name used for assistant response messages."
+        "description": "Display name used for flow response messages."
       },
       "maxMessages": {
         "type": "integer",
@@ -43,7 +63,7 @@
       "requestCommand": {
         "type": "string",
         "title": "Request Command",
-        "description": "Command name the host uses to invoke this chat module programmatically."
+        "description": "Command name the host uses to invoke this flow runner module programmatically."
       },
       "graphql": {
         "type": "object",
@@ -134,7 +154,7 @@
           "submitVariables": {
             "type": "object",
             "title": "Submit Variables Template",
-            "description": "JSON template for submit mutation variables. Supports placeholders like {{prompt}} and {{requestId}}.",
+            "description": "JSON template for submit mutation variables. Supports placeholders like {{message}}, {{parameters}}, and {{requestId}}.",
             "additionalProperties": true
           },
           "submitRequestIdPath": {
@@ -465,12 +485,16 @@
     ]
   },
   "default_props": {
-    "title": "Example Chat MFE",
-    "inputPlaceholder": "Ask AI...",
-    "submitLabel": "Submit",
-    "assistantLabel": "Assistant",
+    "title": "NiFi Flow Runner",
+    "inputPlaceholder": "Enter message payload...",
+    "parametersLabel": "Parameters (JSON object)",
+    "parametersPlaceholder": "{\n  \"tenant\": \"internal\",\n  \"priority\": \"normal\"\n}",
+    "defaultParametersJson": "{\n  \"tenant\": \"internal\",\n  \"priority\": \"normal\"\n}",
+    "resultLabel": "Latest Result",
+    "submitLabel": "Run Flow",
+    "assistantLabel": "Flow Result",
     "maxMessages": 20,
-    "requestCommand": "mfe.example.chat.send",
+    "requestCommand": "mfe.nifi.flow.send",
     "graphql": {
       "httpUrl": "https://cf-suncoast-graphql-proxy.prod.suncoast.systems/graphql",
       "wsUrl": "wss://cf-suncoast-graphql-proxy.prod.suncoast.systems/graphql",
@@ -489,10 +513,11 @@
       "submitMutation": "mutation PublishAsyncRequest($input: json!) { publish_async_request(input: $input) }",
       "submitVariables": {
         "input": {
-          "handler": "ai-service",
-          "operation": "chat.completion",
+          "handler": "batch-dataflow",
+          "operation": "nifi.flow.invoke",
           "payload": {
-            "prompt": "{{prompt}}",
+            "message": "{{message}}",
+            "parameters": "{{parameters}}",
             "conversationId": "{{conversationId}}"
           },
           "metadata": {

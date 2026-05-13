@@ -217,7 +217,7 @@ async function main() {
   );
   const authToken = await resolvePublishAuthToken();
 
-  const bundlePath = asString(process.env.MODULE_PUBLISH_BUNDLE_PATH, "dist/example-mfe.js");
+  const bundlePath = asString(process.env.MODULE_PUBLISH_BUNDLE_PATH, "dist/nifi-flow-mfe.js");
   const manifestPath = asString(process.env.MODULE_PUBLISH_MANIFEST_PATH, "dist/module.publish.json");
 
   const bundleBytes = await fs.readFile(bundlePath);
@@ -246,7 +246,7 @@ async function main() {
 
   const body = new FormData();
   body.set("payload", JSON.stringify(payload));
-  body.set("bundle_file", new Blob([bundleBytes], { type: "application/javascript" }), "example-mfe.js");
+  body.set("bundle_file", new Blob([bundleBytes], { type: "application/javascript" }), "nifi-flow-mfe.js");
   body.set("manifest_file", new Blob([manifestBytes], { type: "application/json" }), "module.publish.json");
 
   const headers = {

@@ -11,7 +11,7 @@ This document explains how to stand up a new async service behind `publish_async
 
 ## Repos and Control Points
 
-- MFE runtime/config: `/Users/christopherlyons/GitHub/example-mfe`
+- MFE runtime/config: `/Users/christopherlyons/GitHub/nifi-flow-mfe`
 - GraphQL async transport + policy sync: `/Users/christopherlyons/GitHub/k8s-graphql-server`
 - Keycloak realm/config + Google group mapping: `/Users/christopherlyons/GitHub/k8s-keycloak`
 - Token exchange backend: `/Users/christopherlyons/GitHub/keycloak-auth-gateway`

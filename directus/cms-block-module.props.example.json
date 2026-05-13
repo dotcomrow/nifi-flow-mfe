@@ -1,10 +1,14 @@
 {
-  "title": "AI Assistant",
-  "inputPlaceholder": "Ask a question...",
-  "submitLabel": "Send",
-  "assistantLabel": "AI",
+  "title": "NiFi Flow Runner",
+  "inputPlaceholder": "Enter message payload...",
+  "parametersLabel": "Parameters (JSON object)",
+  "parametersPlaceholder": "{\n  \"tenant\": \"internal\",\n  \"priority\": \"normal\"\n}",
+  "defaultParametersJson": "{\n  \"tenant\": \"internal\",\n  \"priority\": \"normal\"\n}",
+  "resultLabel": "Latest Result",
+  "submitLabel": "Run Flow",
+  "assistantLabel": "Flow Result",
   "maxMessages": 40,
-  "requestCommand": "mfe.example.chat.send",
+  "requestCommand": "mfe.nifi.flow.send",
   "graphql": {
     "httpUrl": "",
     "wsUrl": "",
@@ -23,10 +27,11 @@
     "submitMutation": "mutation PublishAsyncRequest($input: json!) { publish_async_request(input: $input) }",
     "submitVariables": {
       "input": {
-        "handler": "ai-service",
-        "operation": "chat.completion",
+        "handler": "batch-dataflow",
+        "operation": "nifi.flow.invoke",
         "payload": {
-          "prompt": "{{prompt}}",
+          "message": "{{message}}",
+          "parameters": "{{parameters}}",
           "conversationId": "{{conversationId}}"
         },
         "metadata": {

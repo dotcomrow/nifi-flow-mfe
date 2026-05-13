@@ -109,7 +109,7 @@ const host = getHost();
 httpUrlInput.value = inferDefaultGraphqlHttpUrl();
 wsUrlInput.value = toWebSocketUrl(httpUrlInput.value);
 authGatewayInput.value = buildEnvDefaults.previewAuthGatewayUrl || "https://login.suncoast.systems";
-authAppSlugInput.value = buildEnvDefaults.previewAuthAppSlug || "example-mfe-preview";
+authAppSlugInput.value = buildEnvDefaults.previewAuthAppSlug || "nifi-flow-mfe-preview";
 authCodeParamInput.value = buildEnvDefaults.previewAuthCodeParam || "gateway_code";
 conversationIdInput.value = "";
 
@@ -428,12 +428,16 @@ async function mountFromForm() {
   const moduleDefinition = createCmsModuleDefinition(MODULE_KEY);
 
   const props = {
-    title: "AI Assistant MFE (Local)",
-    inputPlaceholder: "Ask a question...",
-    submitLabel: "Send",
-    assistantLabel: "AI",
+    title: "NiFi Flow Runner (Local)",
+    inputPlaceholder: "Enter message payload...",
+    parametersLabel: "Parameters (JSON object)",
+    parametersPlaceholder: "{\n  \"tenant\": \"internal\",\n  \"priority\": \"normal\"\n}",
+    defaultParametersJson: "{\n  \"tenant\": \"internal\",\n  \"priority\": \"normal\"\n}",
+    resultLabel: "Latest Result",
+    submitLabel: "Run Flow",
+    assistantLabel: "Flow Result",
     maxMessages: 50,
-    requestCommand: "mfe.example.chat.send",
+    requestCommand: "mfe.nifi.flow.send",
     async: {
       enabled: true,
       mode: "kafka-graphql-bridge",
@@ -445,15 +449,16 @@ async function mountFromForm() {
       httpUrl: httpUrlInput.value.trim(),
       wsUrl: wsUrlInput.value.trim(),
       authToken: authTokenInput.value.trim(),
-      hasuraRole: "ai_user",
+      hasuraRole: "",
       submitMutation:
         "mutation PublishAsyncRequest($input: json!) { publish_async_request(input: $input) }",
       submitVariables: {
         input: {
-          handler: "ai-service",
-          operation: "chat.completion",
+          handler: "batch-dataflow",
+          operation: "nifi.flow.invoke",
           payload: {
-            prompt: "{{prompt}}",
+            message: "{{message}}",
+            parameters: "{{parameters}}",
             conversationId: "{{conversationId}}",
           },
           metadata: {

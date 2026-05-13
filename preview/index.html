@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Example MFE Preview</title>
+    <title>NiFi Flow MFE Preview</title>
     <style>
       :root {
         color-scheme: light;
@@ -126,11 +126,11 @@
     <main class="wrap">
       <section class="panel">
         <div class="heading">
-          <h1 style="margin:0; font-size: 1.1rem;">Example MFE Local Preview</h1>
+          <h1 style="margin:0; font-size: 1.1rem;">NiFi Flow MFE Local Preview</h1>
           <button id="themeToggle" class="secondary" type="button">Theme: Auto</button>
         </div>
         <p class="muted" style="margin:0;">
-          Edit GraphQL endpoints and remount the module. Query/mutation docs are configurable from Directus props in production.
+          Edit GraphQL endpoints and remount the module. The MFE sends a flow request payload and streams back results.
         </p>
         <div class="row">
           <label for="httpUrl">GraphQL HTTP URL</label>
@@ -150,7 +150,7 @@
         </div>
         <div class="row">
           <label for="authAppSlug">Auth App Slug</label>
-          <input id="authAppSlug" value="example-mfe-preview" />
+          <input id="authAppSlug" value="nifi-flow-mfe-preview" />
         </div>
         <div class="row">
           <label for="authCodeParam">Auth Code Query Param</label>

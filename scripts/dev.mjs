@@ -18,15 +18,15 @@ const moduleContext = await context({
   ...shared,
   entryPoints: ["src/index.ts"],
   format: "iife",
-  globalName: "ExampleMfeBundle",
-  outfile: "dev-dist/example-mfe.js",
+  globalName: "NifiFlowMfeBundle",
+  outfile: "dev-dist/nifi-flow-mfe.js",
 });
 
 const previewContext = await context({
   ...shared,
   entryPoints: ["preview/main.ts"],
   format: "iife",
-  globalName: "ExampleMfePreview",
+  globalName: "NifiFlowMfePreview",
   outfile: "dev-dist/preview/main.js",
 });
 
@@ -39,7 +39,7 @@ const serveResult = await previewContext.serve({
 });
 
 console.log("");
-console.log("[example-mfe] local preview running");
+console.log("[nifi-flow-mfe] local preview running");
 console.log(`  URL: http://localhost:${serveResult.port}/preview/`);
 console.log("");
 
