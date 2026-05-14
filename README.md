@@ -72,7 +72,7 @@ Local preview:
 Supported env vars:
 
 - `MFE_PREVIEW_AUTH_GATEWAY_URL` (preview login gateway, usually `https://login.suncoast.systems`)
-- `MFE_PREVIEW_AUTH_APP_SLUG` (registered app slug in auth-gateway, for example `nifi-flow-mfe-preview`)
+- `MFE_PREVIEW_AUTH_APP_SLUG` (registered app slug in auth-gateway, for example `nifi-flow-mfe-dev` for local/preview and `nifi-flow-mfe-prod` for production)
 - `MFE_PREVIEW_AUTH_CODE_PARAM` (query key returned by gateway callback, default `gateway_code`)
 - `MFE_PREVIEW_PORT` (dev only)
 

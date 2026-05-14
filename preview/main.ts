@@ -109,7 +109,7 @@ const host = getHost();
 httpUrlInput.value = inferDefaultGraphqlHttpUrl();
 wsUrlInput.value = toWebSocketUrl(httpUrlInput.value);
 authGatewayInput.value = buildEnvDefaults.previewAuthGatewayUrl || "https://login.suncoast.systems";
-authAppSlugInput.value = buildEnvDefaults.previewAuthAppSlug || "nifi-flow-mfe-preview";
+authAppSlugInput.value = buildEnvDefaults.previewAuthAppSlug || "nifi-flow-mfe-dev";
 authCodeParamInput.value = buildEnvDefaults.previewAuthCodeParam || "gateway_code";
 conversationIdInput.value = "";
 

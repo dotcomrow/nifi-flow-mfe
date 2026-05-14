@@ -31,7 +31,7 @@ export function readEnvironment(mode = "production") {
     MFE_PREVIEW_AUTH_APP_SLUG:
       process.env.MFE_PREVIEW_AUTH_APP_SLUG ??
       loaded.MFE_PREVIEW_AUTH_APP_SLUG ??
-      "nifi-flow-mfe-preview",
+      "nifi-flow-mfe-dev",
     MFE_PREVIEW_AUTH_CODE_PARAM:
       process.env.MFE_PREVIEW_AUTH_CODE_PARAM ?? loaded.MFE_PREVIEW_AUTH_CODE_PARAM ?? "gateway_code",
     MFE_PREVIEW_PORT: process.env.MFE_PREVIEW_PORT ?? loaded.MFE_PREVIEW_PORT ?? "4173",
