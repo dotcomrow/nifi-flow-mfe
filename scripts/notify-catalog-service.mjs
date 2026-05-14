@@ -41,17 +41,9 @@ function normalizeChannel(value) {
   return normalized === "prod" ? "prod" : "preview";
 }
 
-function resolveRegistryServiceBaseUrl(channel) {
+function resolveRegistryServiceBaseUrl() {
   const legacy = asString(process.env.MODULE_REGISTRY_SERVICE_URL);
   const preview = asString(process.env.MODULE_REGISTRY_SERVICE_URL_PREVIEW);
-  const prod = asString(
-    process.env.MODULE_REGISTRY_SERVICE_URL_PROD ??
-      process.env.MODULE_REGISTRY_SERVICE_URL_PRODUCTION,
-  );
-
-  if (channel === "prod") {
-    return prod || legacy;
-  }
   return preview || legacy;
 }
 
@@ -206,10 +198,8 @@ async function withGhaOutput(outputs) {
 async function main() {
   const channel = normalizeChannel(process.env.MODULE_CHANNEL);
   const registryServiceBaseUrl = ensureRequired(
-    resolveRegistryServiceBaseUrl(channel),
-    channel === "prod"
-      ? "MODULE_REGISTRY_SERVICE_URL_PROD (or MODULE_REGISTRY_SERVICE_URL)"
-      : "MODULE_REGISTRY_SERVICE_URL_PREVIEW (or MODULE_REGISTRY_SERVICE_URL)",
+    resolveRegistryServiceBaseUrl(),
+    "MODULE_REGISTRY_SERVICE_URL_PREVIEW (or MODULE_REGISTRY_SERVICE_URL)",
   );
   const publishPath = normalizePath(
     process.env.MODULE_REGISTRY_SERVICE_PUBLISH_PATH,

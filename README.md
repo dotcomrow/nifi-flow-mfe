@@ -137,7 +137,6 @@ If your auth provider returns `access_token` in URL hash (implicit flow), the pr
 
 1. Add repository variable(s) or secret(s):
    - `MODULE_REGISTRY_SERVICE_URL_PREVIEW`
-   - `MODULE_REGISTRY_SERVICE_URL_PROD`
    - optional legacy fallback: `MODULE_REGISTRY_SERVICE_URL`
 2. Add repository secrets for module registry publish API auth:
    - `MODULE_REGISTRY_SERVICE_GOOGLE_SERVICE_ACCOUNT_EMAIL`
@@ -169,9 +168,8 @@ Module registry service endpoint called by workflow:
   - tag publish: `prod`
   - manual publish: `preview` (override via workflow input `module_channel`)
 - Service URL selection:
-  - manual dispatch input `registry_target=auto` keeps channel-based behavior
-  - manual dispatch input `registry_target=prod` always targets `MODULE_REGISTRY_SERVICE_URL_PROD` (fallback `MODULE_REGISTRY_SERVICE_URL`)
-  - manual dispatch input `registry_target=preview` always targets `MODULE_REGISTRY_SERVICE_URL_PREVIEW` (fallback `MODULE_REGISTRY_SERVICE_URL`)
+  - publish workflow always targets `MODULE_REGISTRY_SERVICE_URL_PREVIEW` (fallback `MODULE_REGISTRY_SERVICE_URL`)
+  - manual dispatch input `registry_target` is restricted to `preview`
 
 ## Important Runtime Note
 
@@ -208,7 +206,7 @@ Workflows included:
   - manual inputs:
     - `build_mode` (`production`/`local`)
     - `module_channel` (`preview`/`prod`)
-    - `registry_target` (`auto`/`preview`/`prod`)
+    - `registry_target` (`preview`)
   - builds bundle + publish metadata
   - uploads artifacts
   - creates a GitHub Release for tag pushes
@@ -222,6 +220,5 @@ Secrets expected by publish workflow:
 Repository variables used by publish workflow:
 
 - `MODULE_REGISTRY_SERVICE_URL_PREVIEW`
-- `MODULE_REGISTRY_SERVICE_URL_PROD`
 - `MODULE_REGISTRY_SERVICE_URL` (legacy fallback)
 - `MODULE_REGISTRY_SERVICE_PUBLISH_PATH` (optional, default `/v1/modules/publish`)

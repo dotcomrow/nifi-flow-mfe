@@ -20,14 +20,12 @@ on:
           - preview
           - prod
       registry_target:
-        description: "Registry target (auto/preview/prod)"
+        description: "Registry target (preview only)"
         required: false
-        default: "auto"
+        default: "preview"
         type: choice
         options:
-          - auto
           - preview
-          - prod
   push:
     tags:
       - "v*"
@@ -123,13 +121,12 @@ jobs:
     env:
       MODULE_REGISTRY_SERVICE_URL: ${{ vars.MODULE_REGISTRY_SERVICE_URL || secrets.MODULE_REGISTRY_SERVICE_URL }}
       MODULE_REGISTRY_SERVICE_URL_PREVIEW: ${{ vars.MODULE_REGISTRY_SERVICE_URL_PREVIEW || secrets.MODULE_REGISTRY_SERVICE_URL_PREVIEW }}
-      MODULE_REGISTRY_SERVICE_URL_PROD: ${{ vars.MODULE_REGISTRY_SERVICE_URL_PROD || vars.MODULE_REGISTRY_SERVICE_URL_PRODUCTION || secrets.MODULE_REGISTRY_SERVICE_URL_PROD || secrets.MODULE_REGISTRY_SERVICE_URL_PRODUCTION }}
       MODULE_REGISTRY_SERVICE_PUBLISH_PATH: ${{ vars.MODULE_REGISTRY_SERVICE_PUBLISH_PATH || '/v1/modules/publish' }}
       MODULE_REGISTRY_SERVICE_GOOGLE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.MODULE_REGISTRY_SERVICE_GOOGLE_SERVICE_ACCOUNT_EMAIL }}
       MODULE_REGISTRY_SERVICE_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.MODULE_REGISTRY_SERVICE_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY }}
       MODULE_REGISTRY_SERVICE_GOOGLE_TOKEN_AUDIENCE: ${{ secrets.MODULE_REGISTRY_SERVICE_GOOGLE_TOKEN_AUDIENCE }}
       MODULE_CHANNEL: ${{ needs['build-package'].outputs.module_channel }}
-      MODULE_REGISTRY_TARGET: ${{ inputs.registry_target || 'auto' }}
+      MODULE_REGISTRY_TARGET: ${{ inputs.registry_target || 'preview' }}
       MFE_BUILD_MODE: ${{ inputs.build_mode || 'production' }}
     steps:
       - name: Checkout
@@ -204,26 +201,19 @@ jobs:
         shell: bash
         run: |
           CHANNEL="$(echo "${MODULE_CHANNEL}" | tr '[:upper:]' '[:lower:]')"
-          TARGET="$(echo "${MODULE_REGISTRY_TARGET:-auto}" | tr '[:upper:]' '[:lower:]')"
+          TARGET="$(echo "${MODULE_REGISTRY_TARGET:-preview}" | tr '[:upper:]' '[:lower:]')"
 
           if [[ -z "${TARGET}" || "${TARGET}" == "auto" ]]; then
-            if [[ "${CHANNEL}" == "prod" ]]; then
-              TARGET="prod"
-            else
-              TARGET="preview"
-            fi
+            TARGET="preview"
           fi
 
-          if [[ "${TARGET}" == "prod" ]]; then
-            TARGET_URL="${MODULE_REGISTRY_SERVICE_URL_PROD:-${MODULE_REGISTRY_SERVICE_URL}}"
-          elif [[ "${TARGET}" == "preview" ]]; then
-            TARGET_URL="${MODULE_REGISTRY_SERVICE_URL_PREVIEW:-${MODULE_REGISTRY_SERVICE_URL}}"
-          else
-            echo "Invalid registry target '${MODULE_REGISTRY_TARGET}'. Expected one of: auto, preview, prod."
+          if [[ "${TARGET}" != "preview" ]]; then
+            echo "Invalid registry target '${MODULE_REGISTRY_TARGET}'. Expected: preview."
             exit 1
           fi
 
-          echo "Resolved registry target '${TARGET}' for module channel '${CHANNEL}'."
+          TARGET_URL="${MODULE_REGISTRY_SERVICE_URL_PREVIEW:-${MODULE_REGISTRY_SERVICE_URL}}"
+          echo "Resolved registry target '${TARGET}' for module channel '${CHANNEL}' (publish always uses preview registry)."
           echo "registry_target=${TARGET}" >> "$GITHUB_OUTPUT"
           echo "registry_service_url=${TARGET_URL}" >> "$GITHUB_OUTPUT"
 
@@ -232,6 +222,5 @@ jobs:
         env:
           MODULE_REGISTRY_SERVICE_URL: ${{ steps.registry_url.outputs.registry_service_url }}
           MODULE_REGISTRY_SERVICE_URL_PREVIEW: ${{ steps.registry_url.outputs.registry_service_url }}
-          MODULE_REGISTRY_SERVICE_URL_PROD: ${{ steps.registry_url.outputs.registry_service_url }}
           MODULE_PUBLISH_MANIFEST_PATH: dist/module.publish.json
         run: node scripts/notify-catalog-service.mjs
