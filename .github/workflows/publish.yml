@@ -7,10 +7,18 @@ on:
         description: "Build mode (production/local)"
         required: false
         default: "production"
+        type: choice
+        options:
+          - production
+          - local
       module_channel:
         description: "Catalog channel (preview/prod)"
         required: false
         default: "preview"
+        type: choice
+        options:
+          - preview
+          - prod
       registry_target:
         description: "Registry target (auto/preview/prod)"
         required: false
