@@ -169,8 +169,9 @@ Module registry service endpoint called by workflow:
   - tag publish: `prod`
   - manual publish: `preview` (override via workflow input `module_channel`)
 - Service URL selection:
-  - `prod` channel: `MODULE_REGISTRY_SERVICE_URL_PROD` then fallback `MODULE_REGISTRY_SERVICE_URL`
-  - `preview` channel: `MODULE_REGISTRY_SERVICE_URL_PREVIEW` then fallback `MODULE_REGISTRY_SERVICE_URL`
+  - manual dispatch input `registry_target=auto` keeps channel-based behavior
+  - manual dispatch input `registry_target=prod` always targets `MODULE_REGISTRY_SERVICE_URL_PROD` (fallback `MODULE_REGISTRY_SERVICE_URL`)
+  - manual dispatch input `registry_target=preview` always targets `MODULE_REGISTRY_SERVICE_URL_PREVIEW` (fallback `MODULE_REGISTRY_SERVICE_URL`)
 
 ## Important Runtime Note
 
@@ -204,6 +205,10 @@ Workflows included:
   - uploads dist artifacts
 - `.github/workflows/publish.yml`
   - runs on `v*` tags or manual dispatch
+  - manual inputs:
+    - `build_mode` (`production`/`local`)
+    - `module_channel` (`preview`/`prod`)
+    - `registry_target` (`auto`/`preview`/`prod`)
   - builds bundle + publish metadata
   - uploads artifacts
   - creates a GitHub Release for tag pushes
