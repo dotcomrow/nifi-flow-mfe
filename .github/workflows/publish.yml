@@ -11,14 +11,6 @@ on:
         options:
           - production
           - local
-      module_channel:
-        description: "Catalog channel (preview/prod)"
-        required: false
-        default: "preview"
-        type: choice
-        options:
-          - preview
-          - prod
       registry_target:
         description: "Registry target (preview only)"
         required: false
@@ -40,7 +32,6 @@ jobs:
       contents: write
     env:
       MFE_BUILD_MODE: ${{ inputs.build_mode || 'production' }}
-      MODULE_CHANNEL_OVERRIDE: ${{ inputs.module_channel || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -61,20 +52,11 @@ jobs:
         id: meta
         shell: bash
         run: |
+          echo "module_channel=preview" >> "$GITHUB_OUTPUT"
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "module_version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-            if [[ -n "${MODULE_CHANNEL_OVERRIDE}" ]]; then
-              echo "module_channel=${MODULE_CHANNEL_OVERRIDE}" >> "$GITHUB_OUTPUT"
-            else
-              echo "module_channel=prod" >> "$GITHUB_OUTPUT"
-            fi
           else
             echo "module_version=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
-            if [[ -n "${MODULE_CHANNEL_OVERRIDE}" ]]; then
-              echo "module_channel=${MODULE_CHANNEL_OVERRIDE}" >> "$GITHUB_OUTPUT"
-            else
-              echo "module_channel=preview" >> "$GITHUB_OUTPUT"
-            fi
           fi
 
       - name: Prepare Module Publish Manifest

@@ -165,8 +165,7 @@ Module registry service endpoint called by workflow:
 - `POST <resolved-service-url><MODULE_REGISTRY_SERVICE_PUBLISH_PATH>`
 - Default path: `/v1/modules/publish`
 - Channel defaults:
-  - tag publish: `prod`
-  - manual publish: `preview` (override via workflow input `module_channel`)
+  - all publishes use `preview` (tag and manual)
 - Service URL selection:
   - publish workflow always targets `MODULE_REGISTRY_SERVICE_URL_PREVIEW` (fallback `MODULE_REGISTRY_SERVICE_URL`)
   - manual dispatch input `registry_target` is restricted to `preview`
@@ -205,7 +204,6 @@ Workflows included:
   - runs on `v*` tags or manual dispatch
   - manual inputs:
     - `build_mode` (`production`/`local`)
-    - `module_channel` (`preview`/`prod`)
     - `registry_target` (`preview`)
   - builds bundle + publish metadata
   - uploads artifacts
