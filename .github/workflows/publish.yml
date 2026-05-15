@@ -11,13 +11,6 @@ on:
         options:
           - production
           - local
-      registry_target:
-        description: "Registry target (preview only)"
-        required: false
-        default: "preview"
-        type: choice
-        options:
-          - preview
   push:
     tags:
       - "v*"
@@ -108,7 +101,6 @@ jobs:
       MODULE_REGISTRY_SERVICE_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.MODULE_REGISTRY_SERVICE_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY }}
       MODULE_REGISTRY_SERVICE_GOOGLE_TOKEN_AUDIENCE: ${{ secrets.MODULE_REGISTRY_SERVICE_GOOGLE_TOKEN_AUDIENCE }}
       MODULE_CHANNEL: ${{ needs['build-package'].outputs.module_channel }}
-      MODULE_REGISTRY_TARGET: ${{ inputs.registry_target || 'preview' }}
       MFE_BUILD_MODE: ${{ inputs.build_mode || 'production' }}
     steps:
       - name: Checkout
@@ -182,21 +174,12 @@ jobs:
         id: registry_url
         shell: bash
         run: |
-          CHANNEL="$(echo "${MODULE_CHANNEL}" | tr '[:upper:]' '[:lower:]')"
-          TARGET="$(echo "${MODULE_REGISTRY_TARGET:-preview}" | tr '[:upper:]' '[:lower:]')"
-
-          if [[ -z "${TARGET}" || "${TARGET}" == "auto" ]]; then
-            TARGET="preview"
-          fi
-
-          if [[ "${TARGET}" != "preview" ]]; then
-            echo "Invalid registry target '${MODULE_REGISTRY_TARGET}'. Expected: preview."
+          TARGET_URL="${MODULE_REGISTRY_SERVICE_URL_PREVIEW:-${MODULE_REGISTRY_SERVICE_URL}}"
+          if [[ -z "${TARGET_URL}" ]]; then
+            echo "Missing MODULE_REGISTRY_SERVICE_URL_PREVIEW (or MODULE_REGISTRY_SERVICE_URL)."
             exit 1
           fi
-
-          TARGET_URL="${MODULE_REGISTRY_SERVICE_URL_PREVIEW:-${MODULE_REGISTRY_SERVICE_URL}}"
-          echo "Resolved registry target '${TARGET}' for module channel '${CHANNEL}' (publish always uses preview registry)."
-          echo "registry_target=${TARGET}" >> "$GITHUB_OUTPUT"
+          echo "Resolved preview registry URL for publish."
           echo "registry_service_url=${TARGET_URL}" >> "$GITHUB_OUTPUT"
 
       - name: Notify Module Registry Service

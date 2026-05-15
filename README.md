@@ -168,7 +168,6 @@ Module registry service endpoint called by workflow:
   - all publishes use `preview` (tag and manual)
 - Service URL selection:
   - publish workflow always targets `MODULE_REGISTRY_SERVICE_URL_PREVIEW` (fallback `MODULE_REGISTRY_SERVICE_URL`)
-  - manual dispatch input `registry_target` is restricted to `preview`
 
 ## Important Runtime Note
 
@@ -204,7 +203,6 @@ Workflows included:
   - runs on `v*` tags or manual dispatch
   - manual inputs:
     - `build_mode` (`production`/`local`)
-    - `registry_target` (`preview`)
   - builds bundle + publish metadata
   - uploads artifacts
   - creates a GitHub Release for tag pushes
