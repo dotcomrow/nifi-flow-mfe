@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "dotenv": "^16.6.1",
-    "esbuild": "^0.25.9",
+    "esbuild": "^0.28.1",
     "graphql-ws": "^5.16.0",
     "typescript": "^5.9.2"
   }
