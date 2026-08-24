@@ -5,3 +5,4 @@ dev-dist
 .env*
 !.env.local.example
 !.env.production.example
+.DS_Store
