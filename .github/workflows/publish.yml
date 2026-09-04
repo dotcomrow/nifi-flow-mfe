@@ -19,15 +19,6 @@ on:
         options:
           - preview
           - production
-      module_channel:
-        description: "Module channel to publish (auto/preview/prod)"
-        required: false
-        default: "auto"
-        type: choice
-        options:
-          - auto
-          - preview
-          - prod
   push:
     tags:
       - "v*"
@@ -64,30 +55,14 @@ jobs:
         shell: bash
         env:
           REGISTRY_TARGET: ${{ inputs.registry_target || 'preview' }}
-          REQUESTED_MODULE_CHANNEL: ${{ inputs.module_channel || 'auto' }}
         run: |
-          case "${REQUESTED_MODULE_CHANNEL}" in
-            auto)
-              if [[ "${REGISTRY_TARGET}" == "production" ]]; then
-                MODULE_CHANNEL="prod"
-              else
-                MODULE_CHANNEL="preview"
-              fi
-              ;;
-            preview|prod)
-              MODULE_CHANNEL="${REQUESTED_MODULE_CHANNEL}"
-              ;;
-            *)
-              echo "Unsupported module_channel: ${REQUESTED_MODULE_CHANNEL}. Expected auto, preview, or prod."
-              exit 1
-              ;;
-          esac
-
           case "${REGISTRY_TARGET}" in
             production)
+              echo "module_channel=prod" >> "$GITHUB_OUTPUT"
               echo "registry_target=production" >> "$GITHUB_OUTPUT"
               ;;
             preview)
+              echo "module_channel=preview" >> "$GITHUB_OUTPUT"
               echo "registry_target=preview" >> "$GITHUB_OUTPUT"
               ;;
             *)
@@ -95,7 +70,6 @@ jobs:
               exit 1
               ;;
           esac
-          echo "module_channel=${MODULE_CHANNEL}" >> "$GITHUB_OUTPUT"
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "module_version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           else
