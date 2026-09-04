@@ -11,6 +11,14 @@ on:
         options:
           - production
           - local
+      registry_target:
+        description: "Module registry target (preview/production)"
+        required: false
+        default: "preview"
+        type: choice
+        options:
+          - preview
+          - production
   push:
     tags:
       - "v*"
@@ -21,6 +29,7 @@ jobs:
     outputs:
       module_version: ${{ steps.meta.outputs.module_version }}
       module_channel: ${{ steps.meta.outputs.module_channel }}
+      registry_target: ${{ steps.meta.outputs.registry_target }}
     permissions:
       contents: write
     env:
@@ -44,8 +53,23 @@ jobs:
       - name: Resolve Publish Metadata
         id: meta
         shell: bash
+        env:
+          REGISTRY_TARGET: ${{ inputs.registry_target || 'preview' }}
         run: |
-          echo "module_channel=preview" >> "$GITHUB_OUTPUT"
+          case "${REGISTRY_TARGET}" in
+            production)
+              echo "module_channel=prod" >> "$GITHUB_OUTPUT"
+              echo "registry_target=production" >> "$GITHUB_OUTPUT"
+              ;;
+            preview)
+              echo "module_channel=preview" >> "$GITHUB_OUTPUT"
+              echo "registry_target=preview" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unsupported registry_target: ${REGISTRY_TARGET}. Expected preview or production."
+              exit 1
+              ;;
+          esac
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "module_version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           else
@@ -94,6 +118,7 @@ jobs:
     permissions:
       contents: read
     env:
+      MODULE_REGISTRY_SERVICE_URL_PROD: ${{ vars.MODULE_REGISTRY_SERVICE_URL_PROD || secrets.MODULE_REGISTRY_SERVICE_URL_PROD }}
       MODULE_REGISTRY_SERVICE_URL: ${{ vars.MODULE_REGISTRY_SERVICE_URL || secrets.MODULE_REGISTRY_SERVICE_URL }}
       MODULE_REGISTRY_SERVICE_URL_PREVIEW: ${{ vars.MODULE_REGISTRY_SERVICE_URL_PREVIEW || secrets.MODULE_REGISTRY_SERVICE_URL_PREVIEW }}
       MODULE_REGISTRY_SERVICE_PUBLISH_PATH: ${{ vars.MODULE_REGISTRY_SERVICE_PUBLISH_PATH || '/v1/modules/publish' }}
@@ -102,6 +127,7 @@ jobs:
       MODULE_REGISTRY_SERVICE_GOOGLE_TOKEN_AUDIENCE: ${{ secrets.MODULE_REGISTRY_SERVICE_GOOGLE_TOKEN_AUDIENCE }}
       MODULE_CHANNEL: ${{ needs['build-package'].outputs.module_channel }}
       MFE_BUILD_MODE: ${{ inputs.build_mode || 'production' }}
+      MODULE_REGISTRY_TARGET: ${{ needs['build-package'].outputs.registry_target }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -174,12 +200,31 @@ jobs:
         id: registry_url
         shell: bash
         run: |
-          TARGET_URL="${MODULE_REGISTRY_SERVICE_URL_PREVIEW:-${MODULE_REGISTRY_SERVICE_URL}}"
-          if [[ -z "${TARGET_URL}" ]]; then
-            echo "Missing MODULE_REGISTRY_SERVICE_URL_PREVIEW (or MODULE_REGISTRY_SERVICE_URL)."
-            exit 1
-          fi
-          echo "Resolved preview registry URL for publish."
+          TARGET="${MODULE_REGISTRY_TARGET:-preview}"
+
+          case "${TARGET}" in
+            preview)
+              TARGET_URL="${MODULE_REGISTRY_SERVICE_URL_PREVIEW:-${MODULE_REGISTRY_SERVICE_URL}}"
+              if [[ -z "${TARGET_URL}" ]]; then
+                echo "Missing MODULE_REGISTRY_SERVICE_URL_PREVIEW (or MODULE_REGISTRY_SERVICE_URL) for preview publish."
+                exit 1
+              fi
+              ;;
+            production)
+              TARGET_URL="${MODULE_REGISTRY_SERVICE_URL_PROD:-${MODULE_REGISTRY_SERVICE_URL}}"
+              if [[ -z "${TARGET_URL}" ]]; then
+                echo "Missing MODULE_REGISTRY_SERVICE_URL_PROD (or MODULE_REGISTRY_SERVICE_URL) for production publish."
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Unsupported MODULE_REGISTRY_TARGET: ${TARGET}. Expected preview or production."
+              exit 1
+              ;;
+          esac
+
+          echo "Resolved ${TARGET} registry URL for publish."
+          echo "registry_target=${TARGET}" >> "$GITHUB_OUTPUT"
           echo "registry_service_url=${TARGET_URL}" >> "$GITHUB_OUTPUT"
 
       - name: Notify Module Registry Service
