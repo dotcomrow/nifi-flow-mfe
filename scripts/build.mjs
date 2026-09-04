@@ -47,7 +47,7 @@ await build({
   format: "iife",
   globalName: "NifiFlowMfeBundle",
   outfile: "dist/nifi-flow-mfe.js",
-  sourcemap: true,
+  sourcemap: "external",
   minify: mode === "production",
   define: asEsbuildDefines(env, {
     version: buildVersion,
