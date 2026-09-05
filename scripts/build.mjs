@@ -50,6 +50,7 @@ await build({
   sourcemap: "external",
   minify: mode === "production",
   define: asEsbuildDefines(env, {
+    moduleVersion,
     version: buildVersion,
     commit: buildCommit,
     timestamp: buildTimestamp,

@@ -1,6 +1,7 @@
 declare const __MFE_PREVIEW_AUTH_GATEWAY_URL__: string;
 declare const __MFE_PREVIEW_AUTH_APP_SLUG__: string;
 declare const __MFE_PREVIEW_AUTH_CODE_PARAM__: string;
+declare const __MFE_MODULE_VERSION__: string;
 declare const __MFE_BUILD_VERSION__: string;
 declare const __MFE_BUILD_COMMIT__: string;
 declare const __MFE_BUILD_TIMESTAMP__: string;
@@ -17,6 +18,7 @@ export const buildEnvDefaults = {
   previewAuthGatewayUrl: asDefault(__MFE_PREVIEW_AUTH_GATEWAY_URL__),
   previewAuthAppSlug: asDefault(__MFE_PREVIEW_AUTH_APP_SLUG__),
   previewAuthCodeParam: asDefault(__MFE_PREVIEW_AUTH_CODE_PARAM__),
+  moduleVersion: asDefault(__MFE_MODULE_VERSION__),
   buildVersion: asDefault(__MFE_BUILD_VERSION__),
   buildCommit: asDefault(__MFE_BUILD_COMMIT__),
   buildTimestamp: asDefault(__MFE_BUILD_TIMESTAMP__),

@@ -910,6 +910,60 @@ function emitEvent(ctx: ModuleContext, type: string, payload: JsonObject) {
   ctx.emit(event);
 }
 
+type WindowWithMfeTelemetry = Window & {
+  __SUNCOAST_GET_MFE_BUILD_INFO__?: (
+    moduleKey?: string,
+  ) => Record<string, unknown> | Record<string, Record<string, unknown>> | null;
+  __SUNCOAST_REPORT_MFE_ERROR__?: (error: unknown, context?: Record<string, unknown>) => void;
+};
+
+function readBuildInfo(moduleKey: string): Record<string, unknown> {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  const lookup = (window as WindowWithMfeTelemetry).__SUNCOAST_GET_MFE_BUILD_INFO__;
+  if (typeof lookup !== "function") {
+    return {};
+  }
+  try {
+    return asRecord(lookup(moduleKey));
+  } catch {
+    return {};
+  }
+}
+
+function reportMfeError(
+  ctx: ModuleContext,
+  error: unknown,
+  phase: string,
+  details: Record<string, unknown> = {},
+) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const reporter = (window as WindowWithMfeTelemetry).__SUNCOAST_REPORT_MFE_ERROR__;
+  if (typeof reporter !== "function") {
+    return;
+  }
+
+  const moduleKey = ctx.moduleKey || MODULE_KEY;
+  const buildInfo = readBuildInfo(moduleKey);
+  reporter(error, {
+    ...details,
+    cacheKey: ctx.environment.cacheKey || "",
+    contentHash: ctx.environment.contentHash || "",
+    instanceId: ctx.instanceId,
+    moduleKey,
+    moduleVersion: asString(buildInfo.moduleVersion),
+    phase,
+    source: ctx.environment.source || "",
+    buildCommit: asString(buildInfo.buildCommit),
+    buildMode: asString(buildInfo.buildMode),
+    buildTimestamp: asString(buildInfo.buildTimestamp),
+    buildVersion: asString(buildInfo.buildVersion),
+  });
+}
+
 function normalizeTokenExchangeConfig(value: unknown): GraphqlTokenExchangeConfig {
   const record = asRecord(value);
   const hasConfig = Object.keys(record).length > 0;
@@ -1991,6 +2045,10 @@ export const createModule: ModuleFactory = (ctx): ModuleRuntime => {
       setResult({
         error: message,
         state: "failed",
+      });
+      reportMfeError(ctx, error, "submit", {
+        requestChannel: props.async.requestChannel || "",
+        responseChannel: props.async.responseChannel || "",
       });
     } finally {
       clearActiveSubscription();

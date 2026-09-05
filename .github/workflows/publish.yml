@@ -21,6 +21,7 @@ jobs:
     outputs:
       module_version: ${{ steps.meta.outputs.module_version }}
       module_channel: ${{ steps.meta.outputs.module_channel }}
+      source_map_version: ${{ steps.meta.outputs.source_map_version }}
     permissions:
       contents: write
     env:
@@ -38,19 +39,31 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Build
-        run: npm run build
-
       - name: Resolve Publish Metadata
         id: meta
         shell: bash
         run: |
+          short_sha="${GITHUB_SHA::12}"
           echo "module_channel=preview" >> "$GITHUB_OUTPUT"
+          echo "source_map_version=sha-${short_sha}" >> "$GITHUB_OUTPUT"
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "module_version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           else
-            echo "module_version=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+            echo "module_version=sha-${short_sha}" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Build
+        env:
+          MFE_BUILD_VERSION: ${{ steps.meta.outputs.source_map_version }}
+          MFE_MODULE_VERSION: ${{ steps.meta.outputs.module_version }}
+          MODULE_VERSION: ${{ steps.meta.outputs.module_version }}
+        run: npm run build
+
+      - name: Stage OpenObserve Source Maps
+        env:
+          MODULE_CHANNEL: ${{ steps.meta.outputs.module_channel }}
+          MODULE_VERSION: ${{ steps.meta.outputs.module_version }}
+        run: npm run openobserve:sourcemaps:stage
 
       - name: Prepare Module Publish Manifest
         id: registry
@@ -67,12 +80,14 @@ jobs:
           if-no-files-found: warn
           path: |
             dist/nifi-flow-mfe.js
-            dist/nifi-flow-mfe.js.map
             dist/module.definition.json
             dist/module.publish.json
+            dist/openobserve-sourcemaps/metadata.json
+            dist/openobserve-sourcemaps/sourcemaps.zip
             directus/cms-module.seed.json
             directus/cms-block-module.props.example.json
             scripts/notify-catalog-service.mjs
+            scripts/upload-openobserve-sourcemaps.mjs
 
       - name: Create GitHub Release (tag pushes)
         if: startsWith(github.ref, 'refs/tags/')
@@ -81,7 +96,6 @@ jobs:
           fail_on_unmatched_files: false
           files: |
             dist/nifi-flow-mfe.js
-            dist/nifi-flow-mfe.js.map
             dist/module.definition.json
             dist/module.publish.json
             directus/cms-module.seed.json
@@ -101,7 +115,10 @@ jobs:
       MODULE_REGISTRY_SERVICE_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.MODULE_REGISTRY_SERVICE_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY }}
       MODULE_REGISTRY_SERVICE_GOOGLE_TOKEN_AUDIENCE: ${{ secrets.MODULE_REGISTRY_SERVICE_GOOGLE_TOKEN_AUDIENCE }}
       MODULE_CHANNEL: ${{ needs['build-package'].outputs.module_channel }}
+      MODULE_VERSION: ${{ needs['build-package'].outputs.module_version }}
+      MFE_BUILD_VERSION: ${{ needs['build-package'].outputs.source_map_version }}
       MFE_BUILD_MODE: ${{ inputs.build_mode || 'production' }}
+      MFE_MODULE_VERSION: ${{ needs['build-package'].outputs.module_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -151,6 +168,7 @@ jobs:
           echo "Artifact download failed on self-hosted runner; rebuilding package locally."
           npm ci
           npm run build
+          npm run openobserve:sourcemaps:stage
           npm run publish:registry
 
       - name: Validate Publish Inputs
@@ -160,6 +178,7 @@ jobs:
           REQUIRED_FILES=(
             "dist/nifi-flow-mfe.js"
             "dist/module.publish.json"
+            "dist/openobserve-sourcemaps/sourcemaps.zip"
             "scripts/notify-catalog-service.mjs"
           )
 
@@ -189,3 +208,16 @@ jobs:
           MODULE_REGISTRY_SERVICE_URL_PREVIEW: ${{ steps.registry_url.outputs.registry_service_url }}
           MODULE_PUBLISH_MANIFEST_PATH: dist/module.publish.json
         run: node scripts/notify-catalog-service.mjs
+
+      - name: Upload OpenObserve Source Maps
+        env:
+          OPENOBSERVE_SOURCEMAP_ARCHIVE: dist/openobserve-sourcemaps/sourcemaps.zip
+          # Production MFE promotion reuses an already-built SHA, so upload maps for both RUM envs.
+          OPENOBSERVE_SOURCEMAP_ENVS: ${{ vars.OPENOBSERVE_MFE_SOURCEMAP_ENVS || 'preview,production' }}
+          OPENOBSERVE_SOURCEMAP_ORG: ${{ vars.OPENOBSERVE_SOURCEMAP_ORG || 'default' }}
+          OPENOBSERVE_SOURCEMAP_VERSION: ${{ needs['build-package'].outputs.source_map_version }}
+          OPENOBSERVE_SOURCEMAPS_ENABLED: ${{ vars.OPENOBSERVE_MFE_SOURCEMAPS_ENABLED || 'true' }}
+          OPENOBSERVE_SOURCEMAPS_REQUIRED: ${{ vars.OPENOBSERVE_MFE_SOURCEMAPS_REQUIRED || 'false' }}
+          PLATFORM_DEPLOY_EXECUTOR_TOKEN: ${{ secrets.PLATFORM_DEPLOY_EXECUTOR_TOKEN }}
+          PLATFORM_DEPLOY_EXECUTOR_URL: ${{ vars.PLATFORM_DEPLOY_EXECUTOR_URL || 'http://platform-deploy-executor.directus.svc.cluster.local:8080' }}
+        run: npm run openobserve:sourcemaps:upload

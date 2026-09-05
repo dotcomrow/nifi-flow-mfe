@@ -39,6 +39,8 @@ export function readEnvironment(mode = "production") {
 }
 
 export function asEsbuildDefines(env, buildMeta = {}) {
+  const moduleVersion =
+    typeof buildMeta.moduleVersion === "string" ? buildMeta.moduleVersion.trim() : "";
   const buildVersion =
     typeof buildMeta.version === "string" ? buildMeta.version.trim() : "";
   const buildCommit =
@@ -51,6 +53,7 @@ export function asEsbuildDefines(env, buildMeta = {}) {
     __MFE_PREVIEW_AUTH_GATEWAY_URL__: JSON.stringify(env.MFE_PREVIEW_AUTH_GATEWAY_URL),
     __MFE_PREVIEW_AUTH_APP_SLUG__: JSON.stringify(env.MFE_PREVIEW_AUTH_APP_SLUG),
     __MFE_PREVIEW_AUTH_CODE_PARAM__: JSON.stringify(env.MFE_PREVIEW_AUTH_CODE_PARAM),
+    __MFE_MODULE_VERSION__: JSON.stringify(moduleVersion),
     __MFE_BUILD_VERSION__: JSON.stringify(buildVersion),
     __MFE_BUILD_COMMIT__: JSON.stringify(buildCommit),
     __MFE_BUILD_TIMESTAMP__: JSON.stringify(buildTimestamp),

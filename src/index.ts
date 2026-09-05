@@ -38,7 +38,7 @@ const globalScope = globalThis as GlobalScope;
 
 const buildInfo: MfeBuildInfo = Object.freeze({
   moduleKey: MODULE_KEY,
-  moduleVersion: MODULE_VERSION,
+  moduleVersion: buildEnvDefaults.moduleVersion || MODULE_VERSION,
   buildVersion: buildEnvDefaults.buildVersion || MODULE_VERSION,
   buildCommit: buildEnvDefaults.buildCommit,
   buildTimestamp: buildEnvDefaults.buildTimestamp,
